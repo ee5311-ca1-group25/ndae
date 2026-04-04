@@ -35,9 +35,10 @@ def build_experiment_config(payload: Mapping[str, Any]) -> ExperimentConfig:
 
 
 def build_data_config(payload: Mapping[str, Any]) -> DataConfig:
-    expect_keys(payload, "data", {"root", "image_size", "crop_size", "n_frames"})
+    expect_keys(payload, "data", {"root", "exemplar", "image_size", "crop_size", "n_frames"})
     return DataConfig(
         root=read_str(payload, "root", "data"),
+        exemplar=read_str(payload, "exemplar", "data"),
         image_size=read_int(payload, "image_size", "data"),
         crop_size=read_int(payload, "crop_size", "data"),
         n_frames=read_int(payload, "n_frames", "data"),

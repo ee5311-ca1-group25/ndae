@@ -2,19 +2,16 @@ experiment:
   name: lecture1_smoke
   output_root: outputs
   seed: 42
-
 data:
   root: data_local/svbrdf_mini
   exemplar: clay_solidifying
   image_size: 256
   crop_size: 128
   n_frames: 10
-
 model:
   dim: 64
   n_aug_channels: 9
   solver: heun
-
 train:
   batch_size: 1
   lr: 0.0005

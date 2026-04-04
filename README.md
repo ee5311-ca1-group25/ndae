@@ -2,6 +2,11 @@
 
 Pytorch implementation of the paper "Neural Differential Appearance Equations"
 
+This repository is being built incrementally as a course project. The current
+state corresponds to Lecture 1: package layout, config loading, workspace
+creation, and a dry-run CLI are in place; the actual NDAE training pipeline is
+not implemented yet.
+
 ## Getting Started
 
 ### 1. Install uv
@@ -28,11 +33,25 @@ uv sync
 
 This creates a local virtual environment in .venv and installs all dependencies from pyproject.toml.
 
-### 3. Run the project
+### 3. Run the Lecture 1 Dry Run
 
 ~~~bash
-uv run python main.py
+uv run python main.py --config configs/base.yaml --dry-run
 ~~~
+
+You can also use the script entry point:
+
+~~~bash
+uv run python scripts/train_svbrdf.py --config configs/base.yaml --dry-run
+~~~
+
+The dry run will:
+
+- load the config,
+- create `outputs/<experiment.name>/`,
+- write `config.resolved.yaml`,
+- print a run summary,
+- exit without training.
 
 ### 4. Download a Mini SVBRDF Subset
 
@@ -82,7 +101,13 @@ uv run python scripts/download_svbrdf_mini.py \
 This is the preferred fallback when the repository site blocks Playwright with
 `403 Forbidden`.
 
-### 5. Optional: activate the venv manually
+### 5. Run Tests
+
+~~~bash
+uv run pytest
+~~~
+
+### 6. Optional: activate the venv manually
 
 If you prefer an activated shell:
 

@@ -15,6 +15,7 @@ class ExperimentConfig:
 @dataclass(slots=True)
 class DataConfig:
     root: str
+    exemplar: str
     image_size: int
     crop_size: int
     n_frames: int

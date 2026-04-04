@@ -20,7 +20,7 @@ def load_config(path: str | Path) -> NDAEConfig:
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     raw_config = require_mapping(payload, "config")
     config = config_from_mapping(raw_config)
-    validate_config(config)
+    validate_config(config, base_dir=Path.cwd())
     return config
 
 
