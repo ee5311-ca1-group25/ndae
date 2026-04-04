@@ -8,6 +8,7 @@ import pytest
 
 MODULE_NAMES = [
     "ndae",
+    "ndae.config",
     "ndae.cli",
     "ndae.data",
     "ndae.models",
