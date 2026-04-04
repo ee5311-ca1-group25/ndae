@@ -27,7 +27,7 @@ def test_base_config_loads_into_dataclasses() -> None:
     assert config.experiment.name == "lecture1_smoke"
     assert config.data.root == "data_local/svbrdf_mini"
     assert config.data.exemplar == "clay_solidifying"
-    assert config.data.n_frames == 10
+    assert config.data.n_frames == 8
     assert config.model.dim == 64
     assert config.train.dry_run is True
 
@@ -40,7 +40,7 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
             exemplar="clay_solidifying",
             image_size=256,
             crop_size=128,
-            n_frames=10,
+            n_frames=8,
         ),
         model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
         train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
@@ -53,7 +53,7 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
             "exemplar": "clay_solidifying",
             "image_size": 256,
             "crop_size": 128,
-            "n_frames": 10,
+            "n_frames": 8,
         },
         "model": {"dim": 64, "n_aug_channels": 9, "solver": "heun"},
         "train": {"batch_size": 1, "lr": 0.001, "dry_run": True},
@@ -68,7 +68,7 @@ def test_validate_config_rejects_invalid_semantics() -> None:
             exemplar="clay_solidifying",
             image_size=128,
             crop_size=256,
-            n_frames=10,
+            n_frames=8,
         ),
         model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
         train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
@@ -121,6 +121,42 @@ def test_validate_config_rejects_excessive_frame_count(tmp_path: Path) -> None:
         validate_config(config)
 
 
+def test_validate_config_prefers_manifest_selected_files_over_directory_count(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    exemplar_dir.mkdir(parents=True)
+    for name in ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]:
+        (exemplar_dir / name).write_bytes(b"")
+
+    (exemplar_dir / "_manifest.json").write_text(
+        """
+{
+  "exemplar": "clay_solidifying",
+  "selected_files": [
+    "clay_solidifying/a.jpg",
+    "clay_solidifying/b.jpg"
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = NDAEConfig(
+        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
+        data=DataConfig(
+            root=str(tmp_path / "svbrdf_mini"),
+            exemplar="clay_solidifying",
+            image_size=256,
+            crop_size=128,
+            n_frames=3,
+        ),
+        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
+        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
+    )
+
+    with pytest.raises(ConfigError, match="requested 3, found 2"):
+        validate_config(config)
+
+
 def test_load_config_rejects_unknown_keys(tmp_path: Path) -> None:
     config_path = tmp_path / "invalid.yaml"
     config_path.write_text(
@@ -135,7 +171,7 @@ data:
   exemplar: clay_solidifying
   image_size: 256
   crop_size: 128
-  n_frames: 10
+  n_frames: 8
 
 model:
   dim: 64

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .errors import ConfigError
@@ -85,9 +86,10 @@ def validate_dataset_layout(config: NDAEConfig, *, base_dir: str | Path | None) 
     if not exemplar_dir.is_dir():
         raise ConfigError(f"data.exemplar must resolve to a directory: {exemplar_dir}")
 
-    image_count = count_image_files(exemplar_dir)
+    available_images = resolve_available_images(exemplar_dir, exemplar=config.data.exemplar)
+    image_count = len(available_images)
     if image_count == 0:
-        raise ConfigError(f"data.exemplar contains no image files: {exemplar_dir}")
+        raise ConfigError(f"data.exemplar contains no usable image files: {exemplar_dir}")
     if config.data.n_frames > image_count:
         raise ConfigError(
             "data.n_frames exceeds available images in data.exemplar: "
@@ -111,3 +113,61 @@ def count_image_files(directory: Path) -> int:
         for path in directory.iterdir()
         if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
     )
+
+
+def resolve_available_images(exemplar_dir: Path, *, exemplar: str) -> list[Path]:
+    """Resolve available exemplar images, preferring _manifest.json when present."""
+    manifest_path = exemplar_dir / "_manifest.json"
+    if manifest_path.exists():
+        return load_manifest_images(manifest_path, exemplar_dir=exemplar_dir, exemplar=exemplar)
+
+    return sorted(
+        path
+        for path in exemplar_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+    )
+
+
+def load_manifest_images(
+    manifest_path: Path,
+    *,
+    exemplar_dir: Path,
+    exemplar: str,
+) -> list[Path]:
+    """Load the manifest-declared image set for an exemplar directory."""
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"Invalid manifest JSON: {manifest_path}") from exc
+
+    if not isinstance(payload, dict):
+        raise ConfigError(f"Manifest must be a JSON object: {manifest_path}")
+
+    selected_files = payload.get("selected_files")
+    if not isinstance(selected_files, list):
+        raise ConfigError(f"Manifest selected_files must be a list: {manifest_path}")
+
+    resolved: list[Path] = []
+    for entry in selected_files:
+        if not isinstance(entry, str) or not entry.strip():
+            raise ConfigError(f"Manifest selected_files entries must be non-empty strings: {manifest_path}")
+
+        relative_path = Path(entry)
+        if relative_path.parts and relative_path.parts[0] == exemplar:
+            relative_path = Path(*relative_path.parts[1:])
+        elif len(relative_path.parts) > 1:
+            raise ConfigError(
+                "Manifest selected_files entry must point inside the configured exemplar: "
+                f"{entry}"
+            )
+
+        candidate = exemplar_dir / relative_path
+        if candidate.suffix.lower() not in IMAGE_EXTENSIONS:
+            raise ConfigError(f"Manifest entry is not a supported image file: {entry}")
+        if not candidate.exists():
+            raise ConfigError(f"Manifest entry does not exist on disk: {candidate}")
+        if not candidate.is_file():
+            raise ConfigError(f"Manifest entry is not a file: {candidate}")
+        resolved.append(candidate)
+
+    return sorted(resolved)

@@ -7,7 +7,7 @@ data:
   exemplar: clay_solidifying
   image_size: 256
   crop_size: 128
-  n_frames: 10
+  n_frames: 8
 model:
   dim: 64
   n_aug_channels: 9
