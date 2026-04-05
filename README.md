@@ -7,6 +7,11 @@ state corresponds to Lecture 1: package layout, config loading, workspace
 creation, and a dry-run CLI are in place; the actual NDAE training pipeline is
 not implemented yet.
 
+## Documentation
+
+- GitHub Pages: https://ee5311-ca1-group25.github.io/ndae_doc/
+- In the pydae superproject, docs source is mounted as the `ndae-docs` submodule.
+
 ## Getting Started
 
 ### 1. Install uv
