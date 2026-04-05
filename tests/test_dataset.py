@@ -7,6 +7,12 @@ from PIL import Image
 
 from ndae.config import DataConfig, load_config
 from ndae.data.exemplar import ExemplarDataset
+from ndae.data.sampling import (
+    random_crop,
+    random_take,
+    sample_frame_indices,
+    stratified_uniform,
+)
 from ndae.data.timeline import Timeline
 
 
@@ -216,3 +222,149 @@ def test_exemplar_dataset_from_config_resolves_relative_root_with_base_dir(tmp_p
 
     assert len(dataset) == 2
     assert dataset.frames.shape == (2, 3, 12, 12)
+
+
+def test_random_crop_shape_and_determinism() -> None:
+    image = torch.arange(3 * 8 * 8, dtype=torch.float32).reshape(3, 8, 8)
+    g1 = torch.Generator().manual_seed(42)
+    g2 = torch.Generator().manual_seed(42)
+
+    crop1 = random_crop(image, 4, 4, generator=g1)
+    crop2 = random_crop(image, 4, 4, generator=g2)
+
+    assert crop1.shape == (3, 4, 4)
+    assert torch.equal(crop1, crop2)
+
+
+def test_random_crop_preserves_spatial_continuity() -> None:
+    image = torch.arange(3 * 8 * 8, dtype=torch.float32).reshape(3, 8, 8)
+    crop = random_crop(image, 4, 4, generator=torch.Generator().manual_seed(0))
+
+    found = False
+    for top in range(5):
+        for left in range(5):
+            if torch.equal(crop, image[:, top : top + 4, left : left + 4]):
+                found = True
+                break
+        if found:
+            break
+
+    assert found
+
+
+def test_random_crop_rejects_invalid_shape_or_size() -> None:
+    image = torch.zeros(3, 8, 8)
+
+    with pytest.raises(ValueError, match="3D tensor"):
+        random_crop(torch.zeros(8, 8), 4, 4)
+
+    with pytest.raises(ValueError, match="greater than 0"):
+        random_crop(image, 0, 4)
+
+    with pytest.raises(ValueError, match="less than or equal to image size"):
+        random_crop(image, 9, 4)
+
+
+def test_random_take_shape_and_determinism() -> None:
+    image = torch.arange(3 * 8 * 8, dtype=torch.float32).reshape(3, 8, 8)
+    g1 = torch.Generator().manual_seed(42)
+    g2 = torch.Generator().manual_seed(42)
+
+    result1 = random_take(image, 4, 4, generator=g1)
+    result2 = random_take(image, 4, 4, generator=g2)
+
+    assert result1.shape == (3, 4, 4)
+    assert torch.equal(result1, result2)
+
+
+def test_random_take_preserves_values() -> None:
+    image = torch.arange(3 * 8 * 8, dtype=torch.float32).reshape(3, 8, 8)
+    result = random_take(image, 4, 4, generator=torch.Generator().manual_seed(7))
+
+    for channel in range(3):
+        source_values = set(image[channel].flatten().tolist())
+        for value in result[channel].flatten().tolist():
+            assert value in source_values
+
+
+def test_random_take_rejects_invalid_shape_or_sample_size() -> None:
+    image = torch.zeros(3, 8, 8)
+
+    with pytest.raises(ValueError, match="3D tensor"):
+        random_take(torch.zeros(8, 8), 4, 4)
+
+    with pytest.raises(ValueError, match="greater than 0"):
+        random_take(image, 0, 4)
+
+    with pytest.raises(ValueError, match="less than or equal to H \\* W"):
+        random_take(image, 9, 9)
+
+
+def test_stratified_uniform_returns_in_range_ordered_samples() -> None:
+    samples = stratified_uniform(
+        5,
+        0.0,
+        10.0,
+        generator=torch.Generator().manual_seed(123),
+    )
+
+    assert samples.shape == (5,)
+    assert samples.dtype == torch.float32
+    assert torch.all(samples[1:] > samples[:-1])
+
+    length = 2.0
+    for index, sample in enumerate(samples.tolist()):
+        assert index * length <= sample < (index + 1) * length
+
+
+def test_stratified_uniform_is_deterministic_with_seed() -> None:
+    g1 = torch.Generator().manual_seed(99)
+    g2 = torch.Generator().manual_seed(99)
+
+    s1 = stratified_uniform(4, -1.0, 3.0, generator=g1)
+    s2 = stratified_uniform(4, -1.0, 3.0, generator=g2)
+
+    assert torch.equal(s1, s2)
+
+
+def test_sample_frame_indices_returns_zero_for_refresh_step() -> None:
+    assert sample_frame_indices(100, 6, 0) == 0
+
+
+def test_sample_frame_indices_samples_within_expected_stratum() -> None:
+    n_frames = 100
+    refresh_rate = 6
+
+    for step_in_cycle in range(1, refresh_rate):
+        index = sample_frame_indices(
+            n_frames,
+            refresh_rate,
+            step_in_cycle,
+            generator=torch.Generator().manual_seed(step_in_cycle),
+        )
+        segment = n_frames / (refresh_rate - 1)
+        lower = int(segment * (step_in_cycle - 1))
+        upper = min(int(segment * step_in_cycle), n_frames - 1)
+
+        assert lower <= index <= upper
+
+
+def test_sample_frame_indices_is_deterministic_with_seed() -> None:
+    g1 = torch.Generator().manual_seed(2026)
+    g2 = torch.Generator().manual_seed(2026)
+
+    index1 = sample_frame_indices(100, 6, 3, generator=g1)
+    index2 = sample_frame_indices(100, 6, 3, generator=g2)
+
+    assert index1 == index2
+
+
+def test_sample_frame_indices_rejects_invalid_arguments() -> None:
+    with pytest.raises(ValueError, match="n_frames must be greater than 0"):
+        sample_frame_indices(0, 6, 0)
+
+    with pytest.raises(ValueError, match="refresh_rate must be greater than 1"):
+        sample_frame_indices(100, 1, 0)
+
+    with pytest.raises(ValueError, match="step_in_cycle must satisfy"):
+        sample_frame_indices(100, 6, 6)
