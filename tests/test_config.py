@@ -28,6 +28,9 @@ def test_base_config_loads_into_dataclasses() -> None:
     assert config.data.root == "data_local/svbrdf_mini"
     assert config.data.exemplar == "clay_solidifying"
     assert config.data.n_frames == 8
+    assert config.data.t_I == -2.0
+    assert config.data.t_S == 0.0
+    assert config.data.t_E == 10.0
     assert config.model.dim == 64
     assert config.train.dry_run is True
 
@@ -54,6 +57,9 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
             "image_size": 256,
             "crop_size": 128,
             "n_frames": 8,
+            "t_I": -2.0,
+            "t_S": 0.0,
+            "t_E": 10.0,
         },
         "model": {"dim": 64, "n_aug_channels": 9, "solver": "heun"},
         "train": {"batch_size": 1, "lr": 0.001, "dry_run": True},
@@ -189,3 +195,67 @@ train:
 
     with pytest.raises(ConfigError, match="unknown keys: unknown"):
         load_config(config_path)
+
+
+def test_load_config_supports_default_timeline_fields(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    exemplar_dir.mkdir(parents=True)
+    (exemplar_dir / "frame_0000.jpg").write_bytes(b"")
+
+    config_path = tmp_path / "legacy.yaml"
+    config_path.write_text(
+        f"""
+experiment:
+  name: lecture1_smoke
+  output_root: outputs
+  seed: 42
+
+data:
+  root: {tmp_path / "svbrdf_mini"}
+  exemplar: clay_solidifying
+  image_size: 256
+  crop_size: 128
+  n_frames: 1
+
+model:
+  dim: 64
+  n_aug_channels: 9
+  solver: heun
+
+train:
+  batch_size: 1
+  lr: 0.0005
+  dry_run: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+    assert config.data.t_I == -2.0
+    assert config.data.t_S == 0.0
+    assert config.data.t_E == 10.0
+
+
+def test_validate_config_rejects_invalid_timeline_ordering(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    exemplar_dir.mkdir(parents=True)
+    (exemplar_dir / "frame_0000.jpg").write_bytes(b"")
+
+    config = NDAEConfig(
+        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
+        data=DataConfig(
+            root=str(tmp_path / "svbrdf_mini"),
+            exemplar="clay_solidifying",
+            image_size=256,
+            crop_size=128,
+            n_frames=1,
+            t_I=0.0,
+            t_S=0.0,
+            t_E=1.0,
+        ),
+        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
+        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
+    )
+
+    with pytest.raises(ConfigError, match="t_I < t_S < t_E"):
+        validate_config(config)

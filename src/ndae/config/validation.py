@@ -23,6 +23,11 @@ def validate_config(config: NDAEConfig, *, base_dir: str | Path | None = None) -
     ensure_positive_int(config.data.image_size, "data.image_size")
     ensure_positive_int(config.data.crop_size, "data.crop_size")
     ensure_positive_int(config.data.n_frames, "data.n_frames")
+    ensure_float(config.data.t_I, "data.t_I")
+    ensure_float(config.data.t_S, "data.t_S")
+    ensure_float(config.data.t_E, "data.t_E")
+    if not (config.data.t_I < config.data.t_S < config.data.t_E):
+        raise ConfigError("data timeline must satisfy t_I < t_S < t_E")
     if config.data.crop_size > config.data.image_size:
         raise ConfigError("data.crop_size must be less than or equal to data.image_size")
     validate_dataset_layout(config, base_dir=base_dir)
@@ -63,6 +68,11 @@ def ensure_positive_float(value: float, field_name: str) -> None:
         raise ConfigError(f"{field_name} must be a float")
     if float(value) <= 0.0:
         raise ConfigError(f"{field_name} must be greater than 0")
+
+
+def ensure_float(value: float, field_name: str) -> None:
+    if type(value) not in {int, float}:
+        raise ConfigError(f"{field_name} must be a float")
 
 
 def ensure_bool(value: bool, field_name: str) -> None:

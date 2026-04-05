@@ -19,6 +19,9 @@ class DataConfig:
     image_size: int
     crop_size: int
     n_frames: int
+    t_I: float = -2.0
+    t_S: float = 0.0
+    t_E: float = 10.0
 
 
 @dataclass(slots=True)

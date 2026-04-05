@@ -35,13 +35,21 @@ def build_experiment_config(payload: Mapping[str, Any]) -> ExperimentConfig:
 
 
 def build_data_config(payload: Mapping[str, Any]) -> DataConfig:
-    expect_keys(payload, "data", {"root", "exemplar", "image_size", "crop_size", "n_frames"})
+    expect_keys(
+        payload,
+        "data",
+        {"root", "exemplar", "image_size", "crop_size", "n_frames"},
+        optional={"t_I", "t_S", "t_E"},
+    )
     return DataConfig(
         root=read_str(payload, "root", "data"),
         exemplar=read_str(payload, "exemplar", "data"),
         image_size=read_int(payload, "image_size", "data"),
         crop_size=read_int(payload, "crop_size", "data"),
         n_frames=read_int(payload, "n_frames", "data"),
+        t_I=read_optional_float(payload, "t_I", "data", default=-2.0),
+        t_S=read_optional_float(payload, "t_S", "data", default=0.0),
+        t_E=read_optional_float(payload, "t_E", "data", default=10.0),
     )
 
 
@@ -63,10 +71,17 @@ def build_train_config(payload: Mapping[str, Any]) -> TrainConfig:
     )
 
 
-def expect_keys(payload: Mapping[str, Any], section: str, expected: set[str]) -> None:
+def expect_keys(
+    payload: Mapping[str, Any],
+    section: str,
+    required: set[str],
+    *,
+    optional: set[str] | None = None,
+) -> None:
+    known_keys = required | (optional or set())
     actual = set(payload)
-    missing = sorted(expected - actual)
-    extra = sorted(actual - expected)
+    missing = sorted(required - actual)
+    extra = sorted(actual - known_keys)
     problems: list[str] = []
     if missing:
         problems.append(f"missing keys: {', '.join(missing)}")
@@ -95,6 +110,18 @@ def read_float(payload: Mapping[str, Any], key: str, section: str) -> float:
     if type(value) not in {int, float}:
         raise ConfigError(f"{section}.{key} must be a float")
     return float(value)
+
+
+def read_optional_float(
+    payload: Mapping[str, Any],
+    key: str,
+    section: str,
+    *,
+    default: float,
+) -> float:
+    if key not in payload:
+        return default
+    return read_float(payload, key, section)
 
 
 def read_bool(payload: Mapping[str, Any], key: str, section: str) -> bool:
