@@ -180,4 +180,4 @@ def load_manifest_images(
             raise ConfigError(f"Manifest entry is not a file: {candidate}")
         resolved.append(candidate)
 
-    return sorted(resolved)
+    return resolved
