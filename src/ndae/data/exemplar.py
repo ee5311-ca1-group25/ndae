@@ -85,13 +85,16 @@ class ExemplarDataset:
     def _load_frame(path: Path, *, image_size: int) -> torch.Tensor:
         with Image.open(path) as image:
             rgb_image = image.convert("RGB")
-            processed = ExemplarDataset._preprocess_image(rgb_image, image_size=image_size)
+            processed = ExemplarDataset._center_crop_and_resize(
+                rgb_image,
+                image_size=image_size,
+            )
 
         array = np.asarray(processed, dtype=np.float32) / 255.0
         return torch.from_numpy(array).permute(2, 0, 1).contiguous()
 
     @staticmethod
-    def _preprocess_image(image: Image.Image, *, image_size: int) -> Image.Image:
+    def _center_crop_and_resize(image: Image.Image, *, image_size: int) -> Image.Image:
         new_dimension = min(image.width, image.height)
         left = (image.width - new_dimension) / 2
         top = (image.height - new_dimension) / 2

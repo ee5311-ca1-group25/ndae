@@ -8,6 +8,9 @@ data:
   image_size: 256
   crop_size: 128
   n_frames: 8
+  t_I: -2.0
+  t_S: 0.0
+  t_E: 10.0
 model:
   dim: 64
   n_aug_channels: 9

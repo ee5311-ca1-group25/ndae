@@ -25,6 +25,32 @@ def test_package_modules_import(module_name: str) -> None:
     importlib.import_module(module_name)
 
 
+def test_data_package_exports_public_api() -> None:
+    from ndae.data import (
+        ExemplarDataset,
+        Timeline,
+        random_crop,
+        random_take,
+        sample_frame_indices,
+        stratified_uniform,
+    )
+    from ndae.data.exemplar import ExemplarDataset as ExemplarDatasetImpl
+    from ndae.data.sampling import (
+        random_crop as random_crop_impl,
+        random_take as random_take_impl,
+        sample_frame_indices as sample_frame_indices_impl,
+        stratified_uniform as stratified_uniform_impl,
+    )
+    from ndae.data.timeline import Timeline as TimelineImpl
+
+    assert ExemplarDataset is ExemplarDatasetImpl
+    assert Timeline is TimelineImpl
+    assert random_crop is random_crop_impl
+    assert random_take is random_take_impl
+    assert stratified_uniform is stratified_uniform_impl
+    assert sample_frame_indices is sample_frame_indices_impl
+
+
 def test_train_cli_stub_returns_success(capsys: pytest.CaptureFixture[str]) -> None:
     from ndae.cli.train import run_train_cli
 

@@ -178,6 +178,30 @@ def test_exemplar_dataset_uniformly_samples_when_more_images_than_requested(tmp_
     )
 
 
+def test_exemplar_dataset_single_frame_path_uses_first_frame(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "root" / "example"
+    write_image(exemplar_dir / "frame_b.png", size=(24, 16), color=(10, 20, 30))
+    write_image(exemplar_dir / "frame_a.png", size=(24, 16), color=(40, 50, 60))
+    write_image(exemplar_dir / "frame_c.png", size=(24, 16), color=(70, 80, 90))
+
+    (exemplar_dir / "_manifest.json").write_text(
+        json.dumps(
+            {
+                "selected_files": [
+                    "example/frame_c.png",
+                    "example/frame_a.png",
+                    "example/frame_b.png",
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    dataset = ExemplarDataset(tmp_path / "root", "example", n_frames=1, image_size=12)
+
+    assert tuple(path.name for path in dataset.source_paths) == ("frame_c.png",)
+
+
 def test_exemplar_dataset_rejects_insufficient_available_frames(tmp_path: Path) -> None:
     exemplar_dir = tmp_path / "root" / "example"
     write_image(exemplar_dir / "frame_0000.png", size=(16, 16), color=(1, 2, 3))
@@ -287,6 +311,15 @@ def test_random_take_preserves_values() -> None:
             assert value in source_values
 
 
+def test_random_take_destroys_spatial_structure() -> None:
+    image = torch.arange(3 * 16 * 16, dtype=torch.float32).reshape(3, 16, 16)
+    result = random_take(image, 8, 8, generator=torch.Generator().manual_seed(42))
+
+    for top in range(9):
+        for left in range(9):
+            assert not torch.equal(result, image[:, top : top + 8, left : left + 8])
+
+
 def test_random_take_rejects_invalid_shape_or_sample_size() -> None:
     image = torch.zeros(3, 8, 8)
 
@@ -325,6 +358,17 @@ def test_stratified_uniform_is_deterministic_with_seed() -> None:
     s2 = stratified_uniform(4, -1.0, 3.0, generator=g2)
 
     assert torch.equal(s1, s2)
+
+
+def test_stratified_uniform_rejects_invalid_arguments() -> None:
+    with pytest.raises(ValueError, match="n must be greater than 0"):
+        stratified_uniform(0, 0.0, 1.0)
+
+    with pytest.raises(ValueError, match="minval must be less than maxval"):
+        stratified_uniform(4, 1.0, 1.0)
+
+    with pytest.raises(ValueError, match="minval must be less than maxval"):
+        stratified_uniform(4, 2.0, 1.0)
 
 
 def test_sample_frame_indices_returns_zero_for_refresh_step() -> None:
