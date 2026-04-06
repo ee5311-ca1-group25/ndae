@@ -29,6 +29,7 @@ from ndae.rendering.geometry import (
     localize_wiwo,
     normalize,
 )
+from ndae.rendering.postprocess import light_decay, reinhard, tonemapping
 
 
 def _ensure_image_batch(
@@ -120,26 +121,6 @@ def render_svbrdf(
     invalid = (local_wi.narrow(-3, 2, 1) < 0.0) | (local_wo.narrow(-3, 2, 1) < 0.0)
     rendered = torch.where(invalid, torch.zeros_like(rendered), rendered)
     return rendered.squeeze(0) if squeeze else rendered
-
-
-def tonemapping(
-    img: torch.Tensor,
-    gamma: float = 2.2,
-    eps: float = EPSILON,
-) -> torch.Tensor:
-    """Convert linear HDR values into the [0, 1] sRGB range."""
-    return img.clamp(min=eps, max=1.0).pow(1.0 / gamma)
-
-
-def light_decay(distance: torch.Tensor) -> torch.Tensor:
-    """Inverse-square distance falloff."""
-    return 1.0 / (distance**2 + EPSILON)
-
-
-def reinhard(img: torch.Tensor) -> torch.Tensor:
-    """Alternative Reinhard tone mapping."""
-    return img / (1.0 + img)
-
 
 __all__ = [
     "EPSILON",

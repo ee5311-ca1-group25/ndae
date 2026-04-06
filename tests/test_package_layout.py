@@ -115,6 +115,14 @@ def test_rendering_brdf_module_imports() -> None:
     assert module.diffuse_cook_torrance is diffuse_cook_torrance
 
 
+def test_rendering_postprocess_module_imports() -> None:
+    module = importlib.import_module("ndae.rendering.postprocess")
+    from ndae.rendering.renderer import light_decay, tonemapping
+
+    assert module.tonemapping is tonemapping
+    assert module.light_decay is light_decay
+
+
 def test_train_cli_stub_returns_success(capsys: pytest.CaptureFixture[str]) -> None:
     from ndae.cli.train import run_train_cli
 
