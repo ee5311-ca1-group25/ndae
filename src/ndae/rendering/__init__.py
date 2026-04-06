@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .maps import clip_maps, i2l, l2i, split_latent_maps
+
 
 @dataclass(frozen=True, slots=True)
 class RendererSpec:
@@ -47,4 +49,12 @@ def select_renderer(renderer_type: str) -> RendererSpec:
         raise ValueError(f"Unknown renderer_type: {renderer_type}") from exc
 
 
-__all__ = ["RENDERER_REGISTRY", "RendererSpec", "select_renderer"]
+__all__ = [
+    "RENDERER_REGISTRY",
+    "RendererSpec",
+    "clip_maps",
+    "i2l",
+    "l2i",
+    "select_renderer",
+    "split_latent_maps",
+]

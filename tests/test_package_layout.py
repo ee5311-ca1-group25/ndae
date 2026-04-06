@@ -52,7 +52,21 @@ def test_data_package_exports_public_api() -> None:
 
 
 def test_rendering_package_exports_renderer_metadata() -> None:
-    from ndae.rendering import RENDERER_REGISTRY, RendererSpec, select_renderer
+    from ndae.rendering import (
+        RENDERER_REGISTRY,
+        RendererSpec,
+        clip_maps,
+        i2l,
+        l2i,
+        select_renderer,
+        split_latent_maps,
+    )
+    from ndae.rendering.maps import (
+        clip_maps as clip_maps_impl,
+        i2l as i2l_impl,
+        l2i as l2i_impl,
+        split_latent_maps as split_latent_maps_impl,
+    )
 
     renderer = select_renderer("diffuse_cook_torrance")
 
@@ -67,6 +81,10 @@ def test_rendering_package_exports_renderer_metadata() -> None:
         "compl_cook_torrance",
         "compl_iso_cook_torrance",
     }
+    assert l2i is l2i_impl
+    assert i2l is i2l_impl
+    assert split_latent_maps is split_latent_maps_impl
+    assert clip_maps is clip_maps_impl
 
 
 def test_train_cli_stub_returns_success(capsys: pytest.CaptureFixture[str]) -> None:
