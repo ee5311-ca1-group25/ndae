@@ -87,6 +87,12 @@ def test_rendering_package_exports_renderer_metadata() -> None:
     assert clip_maps is clip_maps_impl
 
 
+def test_rendering_normal_module_imports() -> None:
+    module = importlib.import_module("ndae.rendering.normal")
+
+    assert module.height_to_normal is not None
+
+
 def test_train_cli_stub_returns_success(capsys: pytest.CaptureFixture[str]) -> None:
     from ndae.cli.train import run_train_cli
 

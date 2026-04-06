@@ -3,9 +3,10 @@
 Pytorch implementation of the paper "Neural Differential Appearance Equations"
 
 This repository is being built incrementally as a course project. The current
-state corresponds to Lecture 1: package layout, config loading, workspace
-creation, and a dry-run CLI are in place; the actual NDAE training pipeline is
-not implemented yet.
+state corresponds to Lecture 3 Phase C: package layout, config loading,
+workspace creation, rendering metadata, latent-map extraction helpers, and
+height-to-normal conversion are in place; `renderer.py` and the actual NDAE
+training pipeline are not implemented yet.
 
 ## Documentation
 
@@ -110,6 +111,12 @@ This is the preferred fallback when the repository site blocks Playwright with
 
 ~~~bash
 uv run pytest
+~~~
+
+For the current rendering-helper slice, the narrow regression command is:
+
+~~~bash
+uv run pytest tests/test_renderer.py tests/test_package_layout.py tests/test_config.py -q
 ~~~
 
 ### 6. Optional: activate the venv manually
