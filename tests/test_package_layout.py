@@ -53,19 +53,75 @@ def test_data_package_exports_public_api() -> None:
 
 def test_rendering_package_exports_renderer_metadata() -> None:
     from ndae.rendering import (
+        EPSILON,
+        Camera,
+        FlashLight,
         RENDERER_REGISTRY,
         RendererSpec,
+        channelwise_normalize,
         clip_maps,
+        compute_directions,
+        cook_torrance,
+        create_meshgrid,
+        diffuse_cook_torrance,
+        diffuse_iso_cook_torrance,
+        distribution_ggx,
+        fresnel_schlick,
+        geometry_smith,
+        height_to_normal,
         i2l,
+        lambertian,
         l2i,
+        light_decay,
+        localize,
+        localize_wiwo,
+        normalize,
+        reinhard,
+        render_svbrdf,
         select_renderer,
+        smith_g1_ggx,
         split_latent_maps,
+        tonemapping,
+        unpack_brdf_diffuse_cook_torrance,
+        unpack_brdf_diffuse_iso_cook_torrance,
     )
     from ndae.rendering.maps import (
         clip_maps as clip_maps_impl,
         i2l as i2l_impl,
         l2i as l2i_impl,
         split_latent_maps as split_latent_maps_impl,
+    )
+    from ndae.rendering.normal import height_to_normal as height_to_normal_impl
+    from ndae.rendering.geometry import (
+        EPSILON as epsilon_impl,
+        Camera as camera_impl,
+        FlashLight as flash_light_impl,
+        channelwise_normalize as channelwise_normalize_impl,
+        compute_directions as compute_directions_impl,
+        create_meshgrid as create_meshgrid_impl,
+        localize as localize_impl,
+        localize_wiwo as localize_wiwo_impl,
+        normalize as normalize_impl,
+    )
+    from ndae.rendering.brdf import (
+        cook_torrance as cook_torrance_impl,
+        diffuse_cook_torrance as diffuse_cook_torrance_impl,
+        diffuse_iso_cook_torrance as diffuse_iso_cook_torrance_impl,
+        distribution_ggx as distribution_ggx_impl,
+        fresnel_schlick as fresnel_schlick_impl,
+        geometry_smith as geometry_smith_impl,
+        lambertian as lambertian_impl,
+        smith_g1_ggx as smith_g1_ggx_impl,
+    )
+    from ndae.rendering.postprocess import (
+        light_decay as light_decay_impl,
+        reinhard as reinhard_impl,
+        tonemapping as tonemapping_impl,
+    )
+    from ndae.rendering.renderer import (
+        render_svbrdf as render_svbrdf_impl,
+        unpack_brdf_diffuse_cook_torrance as unpack_brdf_diffuse_cook_torrance_impl,
+        unpack_brdf_diffuse_iso_cook_torrance as unpack_brdf_diffuse_iso_cook_torrance_impl,
     )
 
     renderer = select_renderer("diffuse_cook_torrance")
@@ -81,10 +137,34 @@ def test_rendering_package_exports_renderer_metadata() -> None:
         "compl_cook_torrance",
         "compl_iso_cook_torrance",
     }
+    assert EPSILON == epsilon_impl
+    assert Camera is camera_impl
+    assert FlashLight is flash_light_impl
     assert l2i is l2i_impl
     assert i2l is i2l_impl
     assert split_latent_maps is split_latent_maps_impl
     assert clip_maps is clip_maps_impl
+    assert height_to_normal is height_to_normal_impl
+    assert normalize is normalize_impl
+    assert channelwise_normalize is channelwise_normalize_impl
+    assert create_meshgrid is create_meshgrid_impl
+    assert compute_directions is compute_directions_impl
+    assert localize is localize_impl
+    assert localize_wiwo is localize_wiwo_impl
+    assert lambertian is lambertian_impl
+    assert distribution_ggx is distribution_ggx_impl
+    assert smith_g1_ggx is smith_g1_ggx_impl
+    assert geometry_smith is geometry_smith_impl
+    assert fresnel_schlick is fresnel_schlick_impl
+    assert cook_torrance is cook_torrance_impl
+    assert diffuse_cook_torrance is diffuse_cook_torrance_impl
+    assert diffuse_iso_cook_torrance is diffuse_iso_cook_torrance_impl
+    assert render_svbrdf is render_svbrdf_impl
+    assert unpack_brdf_diffuse_cook_torrance is unpack_brdf_diffuse_cook_torrance_impl
+    assert unpack_brdf_diffuse_iso_cook_torrance is unpack_brdf_diffuse_iso_cook_torrance_impl
+    assert tonemapping is tonemapping_impl
+    assert light_decay is light_decay_impl
+    assert reinhard is reinhard_impl
 
 
 def test_rendering_normal_module_imports() -> None:

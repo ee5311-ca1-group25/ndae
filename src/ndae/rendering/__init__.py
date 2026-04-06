@@ -1,9 +1,35 @@
-"""Rendering metadata registry for NDAE."""
+"""Public rendering API for NDAE."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .normal import height_to_normal
+from .renderer import (
+    EPSILON,
+    Camera,
+    FlashLight,
+    channelwise_normalize,
+    compute_directions,
+    cook_torrance,
+    create_meshgrid,
+    diffuse_cook_torrance,
+    diffuse_iso_cook_torrance,
+    distribution_ggx,
+    fresnel_schlick,
+    geometry_smith,
+    lambertian,
+    light_decay,
+    localize,
+    localize_wiwo,
+    normalize,
+    reinhard,
+    render_svbrdf,
+    smith_g1_ggx,
+    tonemapping,
+    unpack_brdf_diffuse_cook_torrance,
+    unpack_brdf_diffuse_iso_cook_torrance,
+)
 from .maps import clip_maps, i2l, l2i, split_latent_maps
 
 
@@ -50,11 +76,35 @@ def select_renderer(renderer_type: str) -> RendererSpec:
 
 
 __all__ = [
+    "EPSILON",
+    "Camera",
+    "FlashLight",
     "RENDERER_REGISTRY",
     "RendererSpec",
+    "channelwise_normalize",
     "clip_maps",
+    "compute_directions",
+    "cook_torrance",
+    "create_meshgrid",
+    "diffuse_cook_torrance",
+    "diffuse_iso_cook_torrance",
+    "distribution_ggx",
+    "fresnel_schlick",
+    "geometry_smith",
+    "height_to_normal",
     "i2l",
+    "lambertian",
     "l2i",
+    "light_decay",
+    "localize",
+    "localize_wiwo",
+    "normalize",
+    "reinhard",
+    "render_svbrdf",
     "select_renderer",
+    "smith_g1_ggx",
     "split_latent_maps",
+    "tonemapping",
+    "unpack_brdf_diffuse_cook_torrance",
+    "unpack_brdf_diffuse_iso_cook_torrance",
 ]

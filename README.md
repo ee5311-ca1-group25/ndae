@@ -3,12 +3,13 @@
 Pytorch implementation of the paper "Neural Differential Appearance Equations"
 
 This repository is being built incrementally as a course project. The current
-state corresponds to Lecture 3 Phase D: package layout, config loading,
+state corresponds to Lecture 3 Phase F: package layout, config loading,
 workspace creation, rendering metadata, latent-map extraction helpers,
-height-to-normal conversion, and the core differentiable svBRDF renderer are in
-place. The rendering core is now split across `rendering/geometry.py`,
-`rendering/brdf.py`, `rendering/postprocess.py`, and `rendering/renderer.py`;
-the full training pipeline is not implemented yet.
+height-to-normal conversion, the core differentiable svBRDF renderer, and the
+top-level `ndae.rendering` public API are in place. The rendering core is now
+split across `rendering/geometry.py`, `rendering/brdf.py`,
+`rendering/postprocess.py`, and `rendering/renderer.py`; the full training
+pipeline is not implemented yet.
 
 ## Documentation
 
@@ -121,7 +122,29 @@ For the current rendering-helper slice, the narrow regression command is:
 uv run pytest tests/test_renderer.py tests/test_package_layout.py tests/test_config.py -q
 ~~~
 
-### 6. Optional: activate the venv manually
+### 6. Render a Synthetic svBRDF Example
+
+~~~bash
+uv run python scripts/render_svbrdf_example.py \
+  --preset plastic \
+  --output outputs/render_example/plastic.png \
+  --image-size 256
+~~~
+
+Or render the darker coated-metal preset:
+
+~~~bash
+uv run python scripts/render_svbrdf_example.py \
+  --preset coated_metal \
+  --output outputs/render_example/coated_metal.png \
+  --image-size 256
+~~~
+
+These presets use smoother, more physically intuitive BRDF maps so the
+highlights look closer to painted plastic and coated metal than the earlier
+debug-pattern example.
+
+### 7. Optional: activate the venv manually
 
 If you prefer an activated shell:
 

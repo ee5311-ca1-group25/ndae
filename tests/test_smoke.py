@@ -1,5 +1,10 @@
+import numpy as np
 from pathlib import Path
 
+from PIL import Image
+import pytest
+
+from ndae.cli.render_example import run_render_example_cli
 from ndae.cli.train import run_train_cli
 
 
@@ -41,3 +46,34 @@ def test_dry_run_creates_workspace_and_resolved_config(tmp_path: Path, capsys) -
     assert "n_brdf_channels: 8" in resolved_text
     assert f"output_root: '{tmp_path}'" not in resolved_text
     assert f"output_root: {tmp_path}" in resolved_text
+
+
+@pytest.mark.parametrize("preset", ["plastic", "coated_metal"])
+def test_render_example_cli_writes_png(tmp_path: Path, capsys, preset: str) -> None:
+    output_path = tmp_path / f"{preset}.png"
+
+    exit_code = run_render_example_cli(
+        [
+            "--preset",
+            preset,
+            "--output",
+            str(output_path),
+            "--image-size",
+            "48",
+        ]
+    )
+
+    assert exit_code == 0
+    assert output_path.is_file()
+
+    with Image.open(output_path) as image:
+        pixels = np.asarray(image)
+        assert image.size == (48, 48)
+        assert pixels.shape[0] == 48
+        assert pixels.shape[1] == 48
+        assert float(pixels.std()) > 0.0
+
+    output = capsys.readouterr().out
+    assert "Rendered synthetic svBRDF example." in output
+    assert f"preset: {preset}" in output
+    assert str(output_path) in output

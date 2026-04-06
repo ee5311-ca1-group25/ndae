@@ -1,15 +1,18 @@
 import pytest
 import torch
 
-from ndae.rendering import clip_maps, i2l, l2i, split_latent_maps
-from ndae.rendering.normal import height_to_normal
-from ndae.rendering.renderer import (
+from ndae.rendering import (
     Camera,
     FlashLight,
+    clip_maps,
     create_meshgrid,
     diffuse_cook_torrance,
+    height_to_normal,
+    i2l,
     lambertian,
+    l2i,
     render_svbrdf,
+    split_latent_maps,
     tonemapping,
     unpack_brdf_diffuse_cook_torrance,
 )
