@@ -93,6 +93,28 @@ def test_rendering_normal_module_imports() -> None:
     assert module.height_to_normal is not None
 
 
+def test_rendering_renderer_module_imports() -> None:
+    module = importlib.import_module("ndae.rendering.renderer")
+
+    assert module.render_svbrdf is not None
+
+
+def test_rendering_geometry_module_imports() -> None:
+    module = importlib.import_module("ndae.rendering.geometry")
+    from ndae.rendering.renderer import Camera, create_meshgrid
+
+    assert module.Camera is Camera
+    assert module.create_meshgrid is create_meshgrid
+
+
+def test_rendering_brdf_module_imports() -> None:
+    module = importlib.import_module("ndae.rendering.brdf")
+    from ndae.rendering.renderer import diffuse_cook_torrance, lambertian
+
+    assert module.lambertian is lambertian
+    assert module.diffuse_cook_torrance is diffuse_cook_torrance
+
+
 def test_train_cli_stub_returns_success(capsys: pytest.CaptureFixture[str]) -> None:
     from ndae.cli.train import run_train_cli
 

@@ -3,6 +3,16 @@ import torch
 
 from ndae.rendering import clip_maps, i2l, l2i, split_latent_maps
 from ndae.rendering.normal import height_to_normal
+from ndae.rendering.renderer import (
+    Camera,
+    FlashLight,
+    create_meshgrid,
+    diffuse_cook_torrance,
+    lambertian,
+    render_svbrdf,
+    tonemapping,
+    unpack_brdf_diffuse_cook_torrance,
+)
 
 
 def test_l2i_i2l_inverse() -> None:
@@ -131,3 +141,127 @@ def test_height_to_normal_backward() -> None:
 
     assert height.grad is not None
     assert not torch.isnan(height.grad).any()
+
+
+def test_lambertian_center_pixel() -> None:
+    wi = torch.tensor([[[0.0]], [[0.0]], [[1.0]]], dtype=torch.float32)
+    diffuse = torch.ones(3, 1, 1, dtype=torch.float32)
+
+    value = lambertian(wi, diffuse)
+
+    assert torch.allclose(value, torch.full((3, 1, 1), 1.0 / torch.pi))
+
+
+def test_create_meshgrid_center_and_axes() -> None:
+    positions = create_meshgrid(5, 5, Camera())
+
+    assert positions.shape == (3, 5, 5)
+    assert positions[0, 2, 2].item() == pytest.approx(0.0)
+    assert positions[1, 2, 2].item() == pytest.approx(0.0)
+    assert positions[2].abs().max().item() == pytest.approx(0.0)
+    assert positions[1, 0, 2].item() > 0.0
+    assert positions[1, -1, 2].item() < 0.0
+    assert positions[0, 2, 0].item() < 0.0
+    assert positions[0, 2, -1].item() > 0.0
+
+
+def test_render_diffuse_only_center_pixel() -> None:
+    brdf_maps = torch.zeros(8, 5, 5, dtype=torch.float32)
+    brdf_maps[:3] = 1.0
+    brdf_maps[6:8] = 0.5
+    normal_map = height_to_normal(torch.zeros(1, 5, 5, dtype=torch.float32))
+
+    rendered = render_svbrdf(
+        brdf_maps,
+        normal_map,
+        Camera(),
+        FlashLight(),
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+    )
+    tone_mapped = tonemapping(rendered)
+
+    expected_linear = torch.tensor(1.0 / torch.pi, dtype=torch.float32)
+    expected_tonemapped = expected_linear.pow(torch.tensor(1.0 / 2.2, dtype=torch.float32))
+    assert rendered[:, 2, 2].mean().item() == pytest.approx(expected_linear.item(), rel=1e-5)
+    assert tone_mapped[:, 2, 2].mean().item() == pytest.approx(expected_tonemapped.item(), rel=1e-5)
+
+
+def test_diffuse_cook_torrance_roughness_monotonicity() -> None:
+    normal_map = height_to_normal(torch.zeros(1, 5, 5, dtype=torch.float32))
+    low_roughness = torch.zeros(8, 5, 5, dtype=torch.float32)
+    high_roughness = torch.zeros(8, 5, 5, dtype=torch.float32)
+    low_roughness[3:6] = 1.0
+    high_roughness[3:6] = 1.0
+    low_roughness[6:8] = 0.1
+    high_roughness[6:8] = 0.9
+
+    rendered_low = render_svbrdf(
+        low_roughness,
+        normal_map,
+        Camera(),
+        FlashLight(),
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+    )
+    rendered_high = render_svbrdf(
+        high_roughness,
+        normal_map,
+        Camera(),
+        FlashLight(),
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+    )
+
+    assert rendered_low[:, 2, 2].mean().item() > rendered_high[:, 2, 2].mean().item()
+
+
+def test_render_svbrdf_crop_matches_full() -> None:
+    brdf_maps = torch.zeros(8, 7, 8, dtype=torch.float32)
+    brdf_maps[:3] = 0.8
+    brdf_maps[3:6] = 0.2
+    brdf_maps[6:8] = 0.3
+    normal_map = height_to_normal(torch.zeros(1, 7, 8, dtype=torch.float32))
+
+    full = render_svbrdf(
+        brdf_maps,
+        normal_map,
+        Camera(),
+        FlashLight(intensity=0.1, xy_position=(0.1, -0.2)),
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+    )
+    top, left, crop_h, crop_w = 2, 3, 3, 4
+    crop = render_svbrdf(
+        brdf_maps[:, top : top + crop_h, left : left + crop_w],
+        normal_map[:, top : top + crop_h, left : left + crop_w],
+        Camera(),
+        FlashLight(intensity=0.1, xy_position=(0.1, -0.2)),
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+        full_height=7,
+        full_width=8,
+        region=(top, left, crop_h, crop_w),
+    )
+
+    assert torch.allclose(crop, full[:, top : top + crop_h, left : left + crop_w], atol=1e-6)
+
+
+def test_render_svbrdf_backward_smoke() -> None:
+    z = torch.randn(18, 8, 8, dtype=torch.float32, requires_grad=True)
+    brdf_maps, height_map = split_latent_maps(z, n_brdf_channels=8, n_normal_channels=1)
+    normal_map = height_to_normal(height_map)
+
+    rendered = render_svbrdf(
+        clip_maps(brdf_maps),
+        normal_map,
+        Camera(),
+        FlashLight(),
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+    )
+    loss = tonemapping(rendered).sum()
+    loss.backward()
+
+    assert z.grad is not None
+    assert not torch.isnan(z.grad).any()

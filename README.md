@@ -3,10 +3,12 @@
 Pytorch implementation of the paper "Neural Differential Appearance Equations"
 
 This repository is being built incrementally as a course project. The current
-state corresponds to Lecture 3 Phase C: package layout, config loading,
-workspace creation, rendering metadata, latent-map extraction helpers, and
-height-to-normal conversion are in place; `renderer.py` and the actual NDAE
-training pipeline are not implemented yet.
+state corresponds to Lecture 3 Phase D: package layout, config loading,
+workspace creation, rendering metadata, latent-map extraction helpers,
+height-to-normal conversion, and the core differentiable svBRDF renderer are in
+place. The rendering core is now split across `rendering/geometry.py`,
+`rendering/brdf.py`, and `rendering/renderer.py`; the full training pipeline is
+not implemented yet.
 
 ## Documentation
 
