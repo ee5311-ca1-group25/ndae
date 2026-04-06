@@ -4,6 +4,7 @@ import torch.nn as nn
 from torchvision.models import VGG19_Weights, vgg19 as torchvision_vgg19
 
 import ndae.losses.perceptual as perceptual
+from ndae.losses import gram_loss, gram_matrix
 
 
 def patch_vgg19(monkeypatch: pytest.MonkeyPatch) -> list[VGG19_Weights]:
@@ -74,3 +75,63 @@ def test_vgg19_rejects_non_rgb_input(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValueError, match="expects a 3-channel input"):
         model(torch.rand(1, 1, 64, 64))
+
+
+def test_gram_matrix_shape_and_symmetry() -> None:
+    feature = torch.randn(64, 32, 32)
+
+    gram = gram_matrix(feature)
+
+    assert gram.shape == (64, 64)
+    assert torch.allclose(gram, gram.transpose(0, 1), atol=1e-6)
+
+
+def test_gram_matrix_supports_batches() -> None:
+    feature = torch.randn(2, 64, 32, 32)
+
+    gram = gram_matrix(feature)
+
+    assert gram.shape == (2, 64, 64)
+
+
+def test_gram_matrix_rejects_invalid_rank() -> None:
+    with pytest.raises(ValueError, match="gram_matrix expects input shaped"):
+        gram_matrix(torch.randn(64, 32))
+
+
+def test_gram_loss_same_input_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    image = torch.rand(1, 3, 64, 64)
+
+    loss = gram_loss(model, image, image)
+
+    assert loss.shape == ()
+    assert loss.item() < 1e-6
+
+
+def test_gram_loss_diff_input_positive(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    exemplar = torch.zeros(1, 3, 64, 64)
+    sample = torch.ones(1, 3, 64, 64)
+
+    loss = gram_loss(model, exemplar, sample)
+
+    assert loss.item() > 0.0
+
+
+def test_gram_loss_gradient_to_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    exemplar = torch.rand(1, 3, 64, 64)
+    sample = torch.rand(1, 3, 64, 64, requires_grad=True)
+
+    loss = gram_loss(model, exemplar, sample)
+    loss.backward()
+
+    assert sample.grad is not None
+    assert not torch.isnan(sample.grad).any()
