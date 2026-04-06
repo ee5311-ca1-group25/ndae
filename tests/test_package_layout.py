@@ -51,12 +51,31 @@ def test_data_package_exports_public_api() -> None:
     assert sample_frame_indices is sample_frame_indices_impl
 
 
+def test_rendering_package_exports_renderer_metadata() -> None:
+    from ndae.rendering import RENDERER_REGISTRY, RendererSpec, select_renderer
+
+    renderer = select_renderer("diffuse_cook_torrance")
+
+    assert isinstance(renderer, RendererSpec)
+    assert renderer is RENDERER_REGISTRY["diffuse_cook_torrance"]
+    assert renderer.n_brdf_channels == 8
+    assert set(RENDERER_REGISTRY) == {
+        "diffuse_cook_torrance",
+        "diffuse_iso_cook_torrance",
+        "cook_torrance",
+        "iso_cook_torrance",
+        "compl_cook_torrance",
+        "compl_iso_cook_torrance",
+    }
+
+
 def test_train_cli_stub_returns_success(capsys: pytest.CaptureFixture[str]) -> None:
     from ndae.cli.train import run_train_cli
 
     assert run_train_cli(["--config", "configs/base.yaml", "--dry-run"]) == 0
     output = capsys.readouterr().out
     assert "NDAE Lecture 1 Dry Run" in output
+    assert "rendering.renderer_type: diffuse_cook_torrance" in output
     assert "Dry run completed." in output
 
 

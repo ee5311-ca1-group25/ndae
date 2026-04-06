@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
+
+from ndae.rendering import RENDERER_REGISTRY, select_renderer
 
 from .errors import ConfigError
 from .schema import NDAEConfig
@@ -33,12 +36,45 @@ def validate_config(config: NDAEConfig, *, base_dir: str | Path | None = None) -
     validate_dataset_layout(config, base_dir=base_dir)
 
     ensure_positive_int(config.model.dim, "model.dim")
-    ensure_non_negative_int(config.model.n_aug_channels, "model.n_aug_channels")
     ensure_non_empty_string(config.model.solver, "model.solver")
+    validate_rendering_config(config)
 
     ensure_positive_int(config.train.batch_size, "train.batch_size")
     ensure_positive_float(config.train.lr, "train.lr")
     ensure_bool(config.train.dry_run, "train.dry_run")
+
+
+def validate_rendering_config(config: NDAEConfig) -> None:
+    renderer_type = config.rendering.renderer_type
+    ensure_non_empty_string(renderer_type, "rendering.renderer_type")
+    if renderer_type not in RENDERER_REGISTRY:
+        supported = ", ".join(RENDERER_REGISTRY)
+        raise ConfigError(f"rendering.renderer_type must be one of: {supported}")
+
+    expected_channels = select_renderer(renderer_type).n_brdf_channels
+    if config.rendering.n_brdf_channels != expected_channels:
+        raise ConfigError(
+            "rendering.n_brdf_channels must match the selected renderer_type: "
+            f"expected {expected_channels}, got {config.rendering.n_brdf_channels}"
+        )
+
+    ensure_positive_int(config.rendering.n_normal_channels, "rendering.n_normal_channels")
+    ensure_non_negative_int(config.rendering.n_aug_channels, "rendering.n_aug_channels")
+    ensure_positive_float(config.rendering.camera_fov, "rendering.camera_fov")
+    ensure_positive_float(config.rendering.camera_distance, "rendering.camera_distance")
+    ensure_float(config.rendering.light_intensity, "rendering.light_intensity")
+    ensure_positive_float(config.rendering.height_scale, "rendering.height_scale")
+    ensure_positive_float(config.rendering.gamma, "rendering.gamma")
+
+    position = config.rendering.light_xy_position
+    if not isinstance(position, tuple) or len(position) != 2:
+        raise ConfigError("rendering.light_xy_position must be a tuple of two finite floats")
+
+    x, y = position
+    if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+        raise ConfigError("rendering.light_xy_position must be a tuple of two finite floats")
+    if not math.isfinite(float(x)) or not math.isfinite(float(y)):
+        raise ConfigError("rendering.light_xy_position must be a tuple of two finite floats")
 
 
 def ensure_non_empty_string(value: str, field_name: str) -> None:

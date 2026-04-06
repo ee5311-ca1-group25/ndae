@@ -5,22 +5,41 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from ndae.rendering import RENDERER_REGISTRY, select_renderer
+
 from .errors import ConfigError
-from .schema import DataConfig, ExperimentConfig, ModelConfig, NDAEConfig, TrainConfig
+from .schema import (
+    DataConfig,
+    ExperimentConfig,
+    ModelConfig,
+    NDAEConfig,
+    RenderingConfig,
+    TrainConfig,
+)
 
 
 def config_from_mapping(payload: Mapping[str, Any]) -> NDAEConfig:
-    expect_keys(payload, "config", {"experiment", "data", "model", "train"})
+    expect_keys(
+        payload,
+        "config",
+        {"experiment", "data", "model", "train"},
+        optional={"rendering"},
+    )
 
     experiment = build_experiment_config(require_mapping(payload["experiment"], "experiment"))
     data = build_data_config(require_mapping(payload["data"], "data"))
     model = build_model_config(require_mapping(payload["model"], "model"))
+    rendering_payload = (
+        require_mapping(payload["rendering"], "rendering") if "rendering" in payload else {}
+    )
+    rendering = build_rendering_config(rendering_payload)
     train = build_train_config(require_mapping(payload["train"], "train"))
 
     return NDAEConfig(
         experiment=experiment,
         data=data,
         model=model,
+        rendering=rendering,
         train=train,
     )
 
@@ -54,11 +73,94 @@ def build_data_config(payload: Mapping[str, Any]) -> DataConfig:
 
 
 def build_model_config(payload: Mapping[str, Any]) -> ModelConfig:
-    expect_keys(payload, "model", {"dim", "n_aug_channels", "solver"})
+    expect_keys(payload, "model", {"dim", "solver"})
     return ModelConfig(
         dim=read_int(payload, "dim", "model"),
-        n_aug_channels=read_int(payload, "n_aug_channels", "model"),
         solver=read_str(payload, "solver", "model"),
+    )
+
+
+def build_rendering_config(payload: Mapping[str, Any]) -> RenderingConfig:
+    defaults = RenderingConfig()
+    expect_keys(
+        payload,
+        "rendering",
+        set(),
+        optional={
+            "renderer_type",
+            "n_normal_channels",
+            "n_aug_channels",
+            "camera_fov",
+            "camera_distance",
+            "light_intensity",
+            "light_xy_position",
+            "height_scale",
+            "gamma",
+        },
+    )
+
+    renderer_type = read_optional_str(
+        payload,
+        "renderer_type",
+        "rendering",
+        default=defaults.renderer_type,
+    )
+    if renderer_type not in RENDERER_REGISTRY:
+        supported = ", ".join(RENDERER_REGISTRY)
+        raise ConfigError(f"rendering.renderer_type must be one of: {supported}")
+    renderer_spec = select_renderer(renderer_type)
+
+    return RenderingConfig(
+        renderer_type=renderer_type,
+        n_brdf_channels=renderer_spec.n_brdf_channels,
+        n_normal_channels=read_optional_int(
+            payload,
+            "n_normal_channels",
+            "rendering",
+            default=defaults.n_normal_channels,
+        ),
+        n_aug_channels=read_optional_int(
+            payload,
+            "n_aug_channels",
+            "rendering",
+            default=defaults.n_aug_channels,
+        ),
+        camera_fov=read_optional_float(
+            payload,
+            "camera_fov",
+            "rendering",
+            default=defaults.camera_fov,
+        ),
+        camera_distance=read_optional_float(
+            payload,
+            "camera_distance",
+            "rendering",
+            default=defaults.camera_distance,
+        ),
+        light_intensity=read_optional_float(
+            payload,
+            "light_intensity",
+            "rendering",
+            default=defaults.light_intensity,
+        ),
+        light_xy_position=read_optional_float_pair(
+            payload,
+            "light_xy_position",
+            "rendering",
+            default=defaults.light_xy_position,
+        ),
+        height_scale=read_optional_float(
+            payload,
+            "height_scale",
+            "rendering",
+            default=defaults.height_scale,
+        ),
+        gamma=read_optional_float(
+            payload,
+            "gamma",
+            "rendering",
+            default=defaults.gamma,
+        ),
     )
 
 
@@ -124,11 +226,55 @@ def read_optional_float(
     return read_float(payload, key, section)
 
 
+def read_optional_str(
+    payload: Mapping[str, Any],
+    key: str,
+    section: str,
+    *,
+    default: str,
+) -> str:
+    if key not in payload:
+        return default
+    return read_str(payload, key, section)
+
+
+def read_optional_int(
+    payload: Mapping[str, Any],
+    key: str,
+    section: str,
+    *,
+    default: int,
+) -> int:
+    if key not in payload:
+        return default
+    return read_int(payload, key, section)
+
+
 def read_bool(payload: Mapping[str, Any], key: str, section: str) -> bool:
     value = payload[key]
     if type(value) is not bool:
         raise ConfigError(f"{section}.{key} must be a boolean")
     return value
+
+
+def read_optional_float_pair(
+    payload: Mapping[str, Any],
+    key: str,
+    section: str,
+    *,
+    default: tuple[float, float],
+) -> tuple[float, float]:
+    if key not in payload:
+        return default
+
+    value = payload[key]
+    if not isinstance(value, (list, tuple)) or len(value) != 2:
+        raise ConfigError(f"{section}.{key} must be a sequence of two floats")
+
+    x, y = value
+    if type(x) not in {int, float} or type(y) not in {int, float}:
+        raise ConfigError(f"{section}.{key} must be a sequence of two floats")
+    return (float(x), float(y))
 
 
 def require_mapping(value: Any, section: str) -> Mapping[str, Any]:

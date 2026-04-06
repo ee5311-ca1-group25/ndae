@@ -2,7 +2,14 @@
 
 from .errors import ConfigError
 from .loader import load_config, to_dict
-from .schema import DataConfig, ExperimentConfig, ModelConfig, NDAEConfig, TrainConfig
+from .schema import (
+    DataConfig,
+    ExperimentConfig,
+    ModelConfig,
+    NDAEConfig,
+    RenderingConfig,
+    TrainConfig,
+)
 from .validation import validate_config
 
 __all__ = [
@@ -11,6 +18,7 @@ __all__ = [
     "ExperimentConfig",
     "ModelConfig",
     "NDAEConfig",
+    "RenderingConfig",
     "TrainConfig",
     "load_config",
     "to_dict",

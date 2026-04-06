@@ -13,8 +13,20 @@ data:
   t_E: 10.0
 model:
   dim: 64
-  n_aug_channels: 9
   solver: heun
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_brdf_channels: 8
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position:
+  - 0.0
+  - 0.0
+  height_scale: 1.0
+  gamma: 2.2
 train:
   batch_size: 1
   lr: 0.0005

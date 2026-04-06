@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,11 +9,58 @@ from ndae.config import (
     ExperimentConfig,
     ModelConfig,
     NDAEConfig,
+    RenderingConfig,
     TrainConfig,
     load_config,
     to_dict,
     validate_config,
 )
+from ndae.rendering import select_renderer
+
+
+def make_rendering_config(**overrides: object) -> RenderingConfig:
+    renderer_type = overrides.pop("renderer_type", "diffuse_cook_torrance")
+    spec = select_renderer(str(renderer_type))
+    config = RenderingConfig(
+        renderer_type=spec.renderer_type,
+        n_brdf_channels=spec.n_brdf_channels,
+    )
+    return replace(config, **overrides)
+
+
+def make_config(
+    *,
+    root: str,
+    exemplar: str = "clay_solidifying",
+    image_size: int = 256,
+    crop_size: int = 128,
+    n_frames: int = 1,
+    t_I: float = -2.0,
+    t_S: float = 0.0,
+    t_E: float = 10.0,
+    rendering: RenderingConfig | None = None,
+) -> NDAEConfig:
+    return NDAEConfig(
+        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
+        data=DataConfig(
+            root=root,
+            exemplar=exemplar,
+            image_size=image_size,
+            crop_size=crop_size,
+            n_frames=n_frames,
+            t_I=t_I,
+            t_S=t_S,
+            t_E=t_E,
+        ),
+        model=ModelConfig(dim=64, solver="heun"),
+        rendering=rendering or make_rendering_config(),
+        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
+    )
+
+
+def write_frame(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"")
 
 
 def test_base_config_loads_into_dataclasses() -> None:
@@ -23,6 +71,7 @@ def test_base_config_loads_into_dataclasses() -> None:
     assert isinstance(config.experiment, ExperimentConfig)
     assert isinstance(config.data, DataConfig)
     assert isinstance(config.model, ModelConfig)
+    assert isinstance(config.rendering, RenderingConfig)
     assert isinstance(config.train, TrainConfig)
     assert config.experiment.name == "lecture1_smoke"
     assert config.data.root == "data_local/svbrdf_mini"
@@ -32,6 +81,13 @@ def test_base_config_loads_into_dataclasses() -> None:
     assert config.data.t_S == 0.0
     assert config.data.t_E == 10.0
     assert config.model.dim == 64
+    assert config.model.solver == "heun"
+    assert config.rendering.renderer_type == "diffuse_cook_torrance"
+    assert config.rendering.n_brdf_channels == 8
+    assert config.rendering.n_normal_channels == 1
+    assert config.rendering.n_aug_channels == 9
+    assert config.rendering.light_xy_position == (0.0, 0.0)
+    assert config.rendering.total_channels == 18
     assert config.train.dry_run is True
 
 
@@ -45,7 +101,8 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
             crop_size=128,
             n_frames=8,
         ),
-        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
+        model=ModelConfig(dim=64, solver="heun"),
+        rendering=make_rendering_config(),
         train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
     )
 
@@ -61,23 +118,71 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
             "t_S": 0.0,
             "t_E": 10.0,
         },
-        "model": {"dim": 64, "n_aug_channels": 9, "solver": "heun"},
+        "model": {"dim": 64, "solver": "heun"},
+        "rendering": {
+            "renderer_type": "diffuse_cook_torrance",
+            "n_brdf_channels": 8,
+            "n_normal_channels": 1,
+            "n_aug_channels": 9,
+            "camera_fov": 50.0,
+            "camera_distance": 1.0,
+            "light_intensity": 0.0,
+            "light_xy_position": (0.0, 0.0),
+            "height_scale": 1.0,
+            "gamma": 2.2,
+        },
         "train": {"batch_size": 1, "lr": 0.001, "dry_run": True},
     }
 
 
-def test_validate_config_rejects_invalid_semantics() -> None:
-    config = NDAEConfig(
-        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
-        data=DataConfig(
-            root="data_local/svbrdf_mini",
-            exemplar="clay_solidifying",
-            image_size=128,
-            crop_size=256,
-            n_frames=8,
-        ),
-        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
-        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
+def test_load_config_supports_default_rendering_block(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config_path = tmp_path / "legacy.yaml"
+    config_path.write_text(
+        f"""
+experiment:
+  name: lecture1_smoke
+  output_root: outputs
+  seed: 42
+
+data:
+  root: {tmp_path / "svbrdf_mini"}
+  exemplar: clay_solidifying
+  image_size: 256
+  crop_size: 128
+  n_frames: 1
+
+model:
+  dim: 64
+  solver: heun
+
+train:
+  batch_size: 1
+  lr: 0.0005
+  dry_run: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+    assert config.data.t_I == -2.0
+    assert config.data.t_S == 0.0
+    assert config.data.t_E == 10.0
+    assert config.rendering.renderer_type == "diffuse_cook_torrance"
+    assert config.rendering.n_brdf_channels == 8
+    assert config.rendering.total_channels == 18
+
+
+def test_validate_config_rejects_invalid_semantics(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config = make_config(
+        root=str(tmp_path / "svbrdf_mini"),
+        image_size=128,
+        crop_size=256,
     )
 
     with pytest.raises(ConfigError, match="crop_size"):
@@ -87,18 +192,7 @@ def test_validate_config_rejects_invalid_semantics() -> None:
 def test_validate_config_rejects_missing_exemplar_directory(tmp_path: Path) -> None:
     root = tmp_path / "svbrdf_mini"
     root.mkdir()
-    config = NDAEConfig(
-        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
-        data=DataConfig(
-            root=str(root),
-            exemplar="missing_exemplar",
-            image_size=256,
-            crop_size=128,
-            n_frames=1,
-        ),
-        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
-        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
-    )
+    config = make_config(root=str(root), exemplar="missing_exemplar")
 
     with pytest.raises(ConfigError, match="data.exemplar directory does not exist"):
         validate_config(config)
@@ -106,22 +200,10 @@ def test_validate_config_rejects_missing_exemplar_directory(tmp_path: Path) -> N
 
 def test_validate_config_rejects_excessive_frame_count(tmp_path: Path) -> None:
     exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
-    exemplar_dir.mkdir(parents=True)
     for idx in range(2):
-        (exemplar_dir / f"frame_{idx:04d}.jpg").write_bytes(b"")
+        write_frame(exemplar_dir / f"frame_{idx:04d}.jpg")
 
-    config = NDAEConfig(
-        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
-        data=DataConfig(
-            root=str(tmp_path / "svbrdf_mini"),
-            exemplar="clay_solidifying",
-            image_size=256,
-            crop_size=128,
-            n_frames=3,
-        ),
-        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
-        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
-    )
+    config = make_config(root=str(tmp_path / "svbrdf_mini"), n_frames=3)
 
     with pytest.raises(ConfigError, match="data.n_frames exceeds available images"):
         validate_config(config)
@@ -129,9 +211,8 @@ def test_validate_config_rejects_excessive_frame_count(tmp_path: Path) -> None:
 
 def test_validate_config_prefers_manifest_selected_files_over_directory_count(tmp_path: Path) -> None:
     exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
-    exemplar_dir.mkdir(parents=True)
     for name in ["a.jpg", "b.jpg", "c.jpg", "d.jpg"]:
-        (exemplar_dir / name).write_bytes(b"")
+        write_frame(exemplar_dir / name)
 
     (exemplar_dir / "_manifest.json").write_text(
         """
@@ -146,18 +227,7 @@ def test_validate_config_prefers_manifest_selected_files_over_directory_count(tm
         encoding="utf-8",
     )
 
-    config = NDAEConfig(
-        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
-        data=DataConfig(
-            root=str(tmp_path / "svbrdf_mini"),
-            exemplar="clay_solidifying",
-            image_size=256,
-            crop_size=128,
-            n_frames=3,
-        ),
-        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
-        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
-    )
+    config = make_config(root=str(tmp_path / "svbrdf_mini"), n_frames=3)
 
     with pytest.raises(ConfigError, match="requested 3, found 2"):
         validate_config(config)
@@ -181,7 +251,6 @@ data:
 
 model:
   dim: 64
-  n_aug_channels: 9
   solver: heun
   unknown: nope
 
@@ -197,12 +266,43 @@ train:
         load_config(config_path)
 
 
-def test_load_config_supports_default_timeline_fields(tmp_path: Path) -> None:
-    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
-    exemplar_dir.mkdir(parents=True)
-    (exemplar_dir / "frame_0000.jpg").write_bytes(b"")
+def test_load_config_rejects_legacy_model_n_aug_channels(tmp_path: Path) -> None:
+    config_path = tmp_path / "invalid.yaml"
+    config_path.write_text(
+        """
+experiment:
+  name: lecture1_smoke
+  output_root: outputs
+  seed: 42
 
-    config_path = tmp_path / "legacy.yaml"
+data:
+  root: data_local/svbrdf_mini
+  exemplar: clay_solidifying
+  image_size: 256
+  crop_size: 128
+  n_frames: 8
+
+model:
+  dim: 64
+  n_aug_channels: 9
+  solver: heun
+
+train:
+  batch_size: 1
+  lr: 0.0005
+  dry_run: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="unknown keys: n_aug_channels"):
+        load_config(config_path)
+
+
+def test_load_config_rejects_invalid_renderer_type(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+    config_path = tmp_path / "invalid_renderer.yaml"
     config_path.write_text(
         f"""
 experiment:
@@ -219,8 +319,10 @@ data:
 
 model:
   dim: 64
-  n_aug_channels: 9
   solver: heun
+
+rendering:
+  renderer_type: not_a_renderer
 
 train:
   batch_size: 1
@@ -230,31 +332,85 @@ train:
         encoding="utf-8",
     )
 
-    config = load_config(config_path)
-    assert config.data.t_I == -2.0
-    assert config.data.t_S == 0.0
-    assert config.data.t_E == 10.0
+    with pytest.raises(ConfigError, match="rendering.renderer_type"):
+        load_config(config_path)
+
+
+def test_load_config_rejects_invalid_light_xy_position(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+    config_path = tmp_path / "invalid_light.yaml"
+    config_path.write_text(
+        f"""
+experiment:
+  name: lecture1_smoke
+  output_root: outputs
+  seed: 42
+
+data:
+  root: {tmp_path / "svbrdf_mini"}
+  exemplar: clay_solidifying
+  image_size: 256
+  crop_size: 128
+  n_frames: 1
+
+model:
+  dim: 64
+  solver: heun
+
+rendering:
+  light_xy_position: [0.0, oops]
+
+train:
+  batch_size: 1
+  lr: 0.0005
+  dry_run: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="rendering.light_xy_position"):
+        load_config(config_path)
+
+
+def test_validate_config_rejects_invalid_rendering_channel_count(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config = make_config(
+        root=str(tmp_path / "svbrdf_mini"),
+        rendering=make_rendering_config(
+            renderer_type="diffuse_cook_torrance",
+            n_brdf_channels=7,
+        ),
+    )
+
+    with pytest.raises(ConfigError, match="rendering.n_brdf_channels"):
+        validate_config(config)
+
+
+def test_validate_config_rejects_non_finite_light_xy_position(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config = make_config(
+        root=str(tmp_path / "svbrdf_mini"),
+        rendering=make_rendering_config(light_xy_position=(float("inf"), 0.0)),
+    )
+
+    with pytest.raises(ConfigError, match="rendering.light_xy_position"):
+        validate_config(config)
 
 
 def test_validate_config_rejects_invalid_timeline_ordering(tmp_path: Path) -> None:
     exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
-    exemplar_dir.mkdir(parents=True)
-    (exemplar_dir / "frame_0000.jpg").write_bytes(b"")
+    write_frame(exemplar_dir / "frame_0000.jpg")
 
-    config = NDAEConfig(
-        experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),
-        data=DataConfig(
-            root=str(tmp_path / "svbrdf_mini"),
-            exemplar="clay_solidifying",
-            image_size=256,
-            crop_size=128,
-            n_frames=1,
-            t_I=0.0,
-            t_S=0.0,
-            t_E=1.0,
-        ),
-        model=ModelConfig(dim=64, n_aug_channels=9, solver="heun"),
-        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
+    config = make_config(
+        root=str(tmp_path / "svbrdf_mini"),
+        t_I=0.0,
+        t_S=0.0,
+        t_E=1.0,
     )
 
     with pytest.raises(ConfigError, match="t_I < t_S < t_E"):
