@@ -1,3 +1,5 @@
-"""Loss module placeholders for NDAE."""
+"""Public loss API for NDAE."""
 
-__all__: list[str] = []
+from .perceptual import VGG19Features
+
+__all__ = ["VGG19Features"]

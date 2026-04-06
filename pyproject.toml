@@ -15,6 +15,7 @@ dependencies = [
     "remotezip>=0.12.3",
     "torch>=2.11.0",
     "torchdiffeq>=0.2.5",
+    "torchvision>=0.22.1",
 ]
 
 [dependency-groups]

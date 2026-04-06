@@ -51,6 +51,13 @@ def test_data_package_exports_public_api() -> None:
     assert sample_frame_indices is sample_frame_indices_impl
 
 
+def test_losses_package_exports_public_api() -> None:
+    from ndae.losses import VGG19Features
+    from ndae.losses.perceptual import VGG19Features as VGG19FeaturesImpl
+
+    assert VGG19Features is VGG19FeaturesImpl
+
+
 def test_rendering_package_exports_renderer_metadata() -> None:
     from ndae.rendering import (
         EPSILON,
