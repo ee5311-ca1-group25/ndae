@@ -91,11 +91,13 @@ def test_models_package_exports_public_api() -> None:
         DefaultConv2d,
         LinearTimeSelfAttention,
         NDAEUNet,
+        ODEFunction,
         Residual,
         Resample,
         SinusoidalTimeEmbedding,
         SpatialLinear,
         TimeMLP,
+        TrajectoryModel,
         zero_init,
     )
     from ndae.models.blocks import (
@@ -107,13 +109,17 @@ def test_models_package_exports_public_api() -> None:
         SpatialLinear as SpatialLinearImpl,
         zero_init as zero_init_impl,
     )
+    from ndae.models.odefunc import ODEFunction as ODEFunctionImpl
     from ndae.models.time_embedding import (
         SinusoidalTimeEmbedding as SinusoidalTimeEmbeddingImpl,
         TimeMLP as TimeMLPImpl,
     )
+    from ndae.models.trajectory import TrajectoryModel as TrajectoryModelImpl
     from ndae.models.unet import NDAEUNet as NDAEUNetImpl
 
     assert NDAEUNet is NDAEUNetImpl
+    assert ODEFunction is ODEFunctionImpl
+    assert TrajectoryModel is TrajectoryModelImpl
     assert SinusoidalTimeEmbedding is SinusoidalTimeEmbeddingImpl
     assert TimeMLP is TimeMLPImpl
     assert ConvBlock is ConvBlockImpl

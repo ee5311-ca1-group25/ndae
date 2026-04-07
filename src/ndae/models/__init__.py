@@ -9,11 +9,15 @@ from .blocks import (
     SpatialLinear,
     zero_init,
 )
+from .odefunc import ODEFunction
 from .time_embedding import SinusoidalTimeEmbedding, TimeMLP
+from .trajectory import TrajectoryModel
 from .unet import NDAEUNet
 
 __all__ = [
     "NDAEUNet",
+    "ODEFunction",
+    "TrajectoryModel",
     "SinusoidalTimeEmbedding",
     "TimeMLP",
     "ConvBlock",

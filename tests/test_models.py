@@ -12,7 +12,9 @@ from ndae.models.blocks import (
     SpatialLinear,
     zero_init,
 )
+from ndae.models.odefunc import ODEFunction
 from ndae.models.time_embedding import SinusoidalTimeEmbedding, TimeMLP
+from ndae.models.trajectory import TrajectoryModel
 from ndae.models.unet import NDAEUNet
 
 
@@ -262,6 +264,173 @@ def test_unet_zero_init_output_is_near_zero() -> None:
     output = model(torch.tensor([0.0, 0.5]), torch.randn(2, 9, 64, 64))
 
     assert output.abs().max().item() < 1e-5
+
+
+def test_odefunc_forward_shape_passthrough() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+    odefunc = ODEFunction(model)
+
+    output = odefunc(torch.tensor([0.0, 0.5]), torch.randn(2, 9, 64, 64))
+
+    assert output.shape == (2, 9, 64, 64)
+
+
+def test_odefunc_keeps_wrapped_module_identity() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+    odefunc = ODEFunction(model)
+
+    assert odefunc.vector_field is model
+
+
+def test_odefunc_registers_the_same_parameters_as_wrapped_model() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+    odefunc = ODEFunction(model)
+
+    odefunc_parameters = list(odefunc.parameters())
+    model_parameters = list(model.parameters())
+
+    assert len(odefunc_parameters) == len(model_parameters)
+    assert all(
+        odefunc_parameter is model_parameter
+        for odefunc_parameter, model_parameter in zip(odefunc_parameters, model_parameters)
+    )
+
+
+def test_odefunc_preserves_unet_zero_init_behavior() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+    odefunc = ODEFunction(model)
+
+    output = odefunc(torch.tensor([0.0, 0.5]), torch.randn(2, 9, 64, 64))
+
+    assert output.abs().max().item() < 1e-5
+
+
+def test_odefunc_gradients_flow_to_wrapped_unet_parameters() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+    odefunc = ODEFunction(model)
+    with torch.no_grad():
+        model.final_conv[-1].conv.weight.fill_(0.01)
+        model.final_conv[-1].conv.bias.zero_()
+
+    x = torch.randn(2, 9, 64, 64, requires_grad=True)
+    output = odefunc(torch.tensor([0.0, 0.5]), x)
+    output.square().mean().backward()
+
+    assert x.grad is not None
+    assert not torch.isnan(x.grad).any()
+    parameter_grads = [parameter.grad for parameter in model.parameters()]
+    assert all(grad is not None for grad in parameter_grads)
+
+
+def test_trajectory_forward_shape_is_time_major() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+    z0 = torch.randn(2, 9, 8, 8)
+    t_eval = torch.tensor([0.0, 0.5, 1.0])
+
+    trajectory = trajectory_model(z0, t_eval, method="euler")
+
+    assert trajectory.shape == (3, 2, 9, 8, 8)
+
+
+def test_trajectory_preserves_initial_state() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+    z0 = torch.randn(2, 9, 8, 8)
+    t_eval = torch.tensor([0.0, 0.5, 1.0])
+
+    trajectory = trajectory_model(z0, t_eval, method="euler")
+
+    assert torch.allclose(trajectory[0], z0)
+
+
+def test_trajectory_zero_init_vector_field_keeps_state_nearly_static() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+    z0 = torch.randn(2, 9, 8, 8)
+    t_eval = torch.tensor([0.0, 0.5, 1.0])
+
+    trajectory = trajectory_model(z0, t_eval, method="euler")
+    expected = z0.unsqueeze(0).expand_as(trajectory)
+
+    assert torch.allclose(trajectory, expected, atol=2e-5)
+
+
+def test_trajectory_gradients_flow_to_wrapped_unet_parameters() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+    with torch.no_grad():
+        model.final_conv[-1].conv.weight.fill_(0.01)
+        model.final_conv[-1].conv.bias.zero_()
+
+    z0 = torch.randn(2, 9, 8, 8, requires_grad=True)
+    t_eval = torch.tensor([0.0, 1.0])
+
+    trajectory = trajectory_model(z0, t_eval, method="euler")
+    trajectory[-1].sum().backward()
+
+    assert z0.grad is not None
+    assert not torch.isnan(z0.grad).any()
+    nonzero_grads = [
+        parameter.grad
+        for parameter in model.parameters()
+        if parameter.grad is not None and torch.count_nonzero(parameter.grad) > 0
+    ]
+    assert nonzero_grads
+
+
+@pytest.mark.parametrize("method", ["euler", "dopri5"])
+def test_trajectory_supports_solver_method_passthrough(method: str) -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+    z0 = torch.randn(1, 9, 8, 8)
+    t_eval = torch.tensor([0.0, 1.0])
+
+    trajectory = trajectory_model(z0, t_eval, method=method)
+
+    assert trajectory.shape == (2, 1, 9, 8, 8)
+
+
+@pytest.mark.parametrize("state_dim", [12, 18])
+def test_trajectory_supports_augmentation_state_dimensions(state_dim: int) -> None:
+    model = NDAEUNet(
+        in_dim=state_dim,
+        out_dim=state_dim,
+        dim=16,
+        dim_mults=(1, 2),
+        use_attn=False,
+    )
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+    z0 = torch.randn(1, state_dim, 8, 8)
+    t_eval = torch.tensor([0.0, 1.0])
+
+    trajectory = trajectory_model(z0, t_eval, method="euler")
+
+    assert trajectory.shape == (2, 1, state_dim, 8, 8)
+
+
+def test_trajectory_rejects_invalid_z0_rank() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+
+    with pytest.raises(ValueError, match=r"expects z0 shaped \(B, C, H, W\)"):
+        trajectory_model(torch.randn(9, 8, 8), torch.tensor([0.0, 1.0]), method="euler")
+
+
+def test_trajectory_rejects_invalid_t_eval_rank() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+
+    with pytest.raises(ValueError, match=r"expects t_eval shaped \[T\]"):
+        trajectory_model(torch.randn(1, 9, 8, 8), torch.tensor([[0.0, 1.0]]), method="euler")
+
+
+def test_trajectory_rejects_t_eval_with_fewer_than_two_points() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=16, dim_mults=(1, 2), use_attn=False)
+    trajectory_model = TrajectoryModel(ODEFunction(model))
+
+    with pytest.raises(ValueError, match="at least 2 time points"):
+        trajectory_model(torch.randn(1, 9, 8, 8), torch.tensor([0.0]), method="euler")
 
 
 def test_unet_gradients_flow_when_final_layer_is_unfrozen_from_zero() -> None:
