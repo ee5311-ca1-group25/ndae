@@ -13,6 +13,7 @@ from ndae.models.blocks import (
     zero_init,
 )
 from ndae.models.time_embedding import SinusoidalTimeEmbedding, TimeMLP
+from ndae.models.unet import NDAEUNet
 
 
 def test_sinusoidal_time_embedding_scalar_shape_and_bounds() -> None:
@@ -220,3 +221,91 @@ def test_residual_attention_gradients_flow_to_input() -> None:
 
     assert x.grad is not None
     assert not torch.isnan(x.grad).any()
+
+
+def test_unet_forward_shape_default_config() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+
+    output = model(torch.tensor([0.0, 0.5]), torch.randn(2, 9, 64, 64))
+
+    assert output.shape == (2, 9, 64, 64)
+
+
+def test_unet_forward_shape_with_deeper_dim_mults() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2, 4), use_attn=False)
+
+    output = model(torch.tensor([0.0, 0.5]), torch.randn(2, 9, 64, 64))
+
+    assert output.shape == (2, 9, 64, 64)
+
+
+@pytest.mark.parametrize("use_attn", [False, True])
+def test_unet_supports_attention_toggle(use_attn: bool) -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=use_attn)
+
+    output = model(torch.tensor([0.0, 0.5]), torch.randn(2, 9, 64, 64))
+
+    assert output.shape == (2, 9, 64, 64)
+
+
+def test_unet_supports_scalar_time_input() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+
+    output = model(torch.tensor(0.5), torch.randn(2, 9, 64, 64))
+
+    assert output.shape == (2, 9, 64, 64)
+
+
+def test_unet_zero_init_output_is_near_zero() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+
+    output = model(torch.tensor([0.0, 0.5]), torch.randn(2, 9, 64, 64))
+
+    assert output.abs().max().item() < 1e-5
+
+
+def test_unet_gradients_flow_when_final_layer_is_unfrozen_from_zero() -> None:
+    model = NDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2), use_attn=False)
+    with torch.no_grad():
+        model.final_conv[-1].conv.weight.fill_(0.01)
+        model.final_conv[-1].conv.bias.zero_()
+
+    x = torch.randn(2, 9, 64, 64, requires_grad=True)
+    output = model(torch.tensor([0.0, 0.5]), x)
+    output.square().mean().backward()
+
+    assert x.grad is not None
+    assert not torch.isnan(x.grad).any()
+    parameter_grads = [parameter.grad for parameter in model.parameters()]
+    assert all(grad is not None for grad in parameter_grads)
+
+
+def test_unet_rejects_invalid_x_rank() -> None:
+    model = NDAEUNet()
+
+    with pytest.raises(ValueError, match=r"expects x shaped \(B, C, H, W\)"):
+        model(torch.tensor([0.0]), torch.randn(9, 64, 64))
+
+
+def test_unet_rejects_invalid_time_rank() -> None:
+    model = NDAEUNet()
+
+    with pytest.raises(ValueError, match=r"expects time shaped \[\] or \[B\]"):
+        model(torch.zeros(2, 1), torch.randn(2, 9, 64, 64))
+
+
+def test_unet_rejects_time_batch_mismatch() -> None:
+    model = NDAEUNet()
+
+    with pytest.raises(ValueError, match="expects batched time with length 2"):
+        model(torch.tensor([0.0]), torch.randn(2, 9, 64, 64))
+
+
+def test_unet_rejects_dim_mults_without_leading_one() -> None:
+    with pytest.raises(ValueError, match="dim_mults to start with 1"):
+        NDAEUNet(dim_mults=(2, 4))
+
+
+def test_unet_rejects_empty_dim_mults() -> None:
+    with pytest.raises(ValueError, match="dim_mults to be non-empty"):
+        NDAEUNet(dim_mults=())
