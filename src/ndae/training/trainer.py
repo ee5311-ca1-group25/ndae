@@ -12,15 +12,10 @@ import torch.nn as nn
 
 from ..data import Timeline, random_crop
 from ..losses import init_loss, local_loss, overflow_loss
-from ..models import TrajectoryModel
-from ..rendering import (
-    Camera,
-    FlashLight,
-    split_latent_maps,
-)
-from ..cli._svbrdf_system import render_latent_state
+from ..rendering import split_latent_maps
 from .schedule import RefreshSchedule, StageConfig
-from .solver import SolverConfig, rollout_generation, rollout_warmup
+from .solver import rollout_generation, rollout_warmup
+from .system import SVBRDFSystem, render_latent_state
 
 
 @dataclass(slots=True)
@@ -34,73 +29,68 @@ class TrainerState:
     cycle_step: int
 
 
+@dataclass(slots=True)
+class TrainerComponents:
+    """Long-lived runtime objects injected into the trainer."""
+
+    system: SVBRDFSystem
+    optimizer_factory: Callable[[], torch.optim.Optimizer]
+    schedule: RefreshSchedule
+    stage_config: StageConfig
+    vgg_features: nn.Module
+
+
+@dataclass(slots=True)
+class TrainerConfig:
+    """Config and data inputs for one trainer instance."""
+
+    exemplar_frames: torch.Tensor
+    timeline: Timeline
+    crop_size: int
+    batch_size: int
+    workspace: Path
+    n_iter: int
+    n_init_iter: int
+    log_every: int
+    generator: torch.Generator | None = None
+    device: torch.device | None = None
+
+
 class Trainer:
     """Coordinate schedule, rollout, rendering, loss, and optimization."""
 
     def __init__(
         self,
         *,
-        trajectory_model: TrajectoryModel,
-        optimizer_factory: Callable[[], torch.optim.Optimizer],
-        schedule: RefreshSchedule,
-        stage_config: StageConfig,
-        solver_config: SolverConfig,
-        exemplar_frames: torch.Tensor,
-        timeline: Timeline,
-        crop_size: int,
-        batch_size: int,
-        workspace: Path,
-        camera: Camera,
-        flash_light: FlashLight,
-        renderer_pp: Callable[..., torch.Tensor],
-        unpack_fn: Callable[..., tuple[torch.Tensor, ...]],
-        vgg_features: nn.Module,
-        n_iter: int,
-        n_init_iter: int,
-        log_every: int,
-        total_channels: int,
-        n_brdf_channels: int,
-        n_normal_channels: int,
-        height_scale: float = 1.0,
-        gamma: float = 2.2,
-        generator: torch.Generator | None = None,
-        device: torch.device | None = None,
+        components: TrainerComponents,
+        config: TrainerConfig,
     ) -> None:
-        self.trajectory_model = trajectory_model
-        self.optimizer_factory = optimizer_factory
-        self.optimizer = optimizer_factory()
-        self.schedule = schedule
-        self.stage_config = stage_config
-        self.solver_config = solver_config
-        self.timeline = timeline
-        self.crop_size = crop_size
-        self.batch_size = batch_size
-        self.workspace = workspace
-        self.camera = camera
-        self.flash_light = flash_light
-        self.renderer_pp = renderer_pp
-        self.unpack_fn = unpack_fn
-        self.vgg_features = vgg_features
-        self.n_iter = n_iter
-        self.n_init_iter = n_init_iter
-        self.log_every = log_every
-        self.total_channels = total_channels
-        self.n_brdf_channels = n_brdf_channels
-        self.n_normal_channels = n_normal_channels
-        self.height_scale = height_scale
-        self.gamma = gamma
-        self.generator = generator
-        self.device = device or next(trajectory_model.parameters()).device
-        self.dtype = next(trajectory_model.parameters()).dtype
-        self.exemplar_frames = exemplar_frames.to(device=self.device, dtype=self.dtype)
+        self.system = components.system
+        self.trajectory_model = self.system.trajectory_model
+        self.optimizer_factory = components.optimizer_factory
+        self.optimizer = self.optimizer_factory()
+        self.schedule = components.schedule
+        self.stage_config = components.stage_config
+        self.vgg_features = components.vgg_features
+        self.timeline = config.timeline
+        self.crop_size = config.crop_size
+        self.batch_size = config.batch_size
+        self.workspace = config.workspace
+        self.n_iter = config.n_iter
+        self.n_init_iter = config.n_init_iter
+        self.log_every = config.log_every
+        self.generator = config.generator
+        self.device = config.device or next(self.trajectory_model.parameters()).device
+        self.dtype = next(self.trajectory_model.parameters()).dtype
+        self.exemplar_frames = config.exemplar_frames.to(device=self.device, dtype=self.dtype)
         self.vgg_features = self.vgg_features.to(self.device, dtype=self.dtype)
-        self.metrics_path = workspace / "metrics.jsonl"
+        self.metrics_path = self.workspace / "metrics.jsonl"
         if not self.metrics_path.exists():
             self.metrics_path.write_text("", encoding="utf-8")
         self.state = TrainerState(
             global_step=0,
-            stage="init" if n_init_iter > 0 else "local",
-            carry_time=stage_config.t_start,
+            stage="init" if self.n_init_iter > 0 else "local",
+            carry_time=self.stage_config.t_start,
             carry_state=None,
             cycle_step=0,
         )
@@ -125,14 +115,14 @@ class Trainer:
                 self.trajectory_model,
                 z0,
                 window,
-                self.solver_config,
+                self.system.solver_config,
             )
             if window.kind == "warmup"
             else rollout_generation(
                 self.trajectory_model,
                 z0,
                 window,
-                self.solver_config,
+                self.system.solver_config,
             )
         )
 
@@ -208,7 +198,7 @@ class Trainer:
         if refresh:
             return torch.randn(
                 self.batch_size,
-                self.total_channels,
+                self.system.total_channels,
                 self.crop_size,
                 self.crop_size,
                 generator=self.generator,
@@ -241,10 +231,10 @@ class Trainer:
     ) -> tuple[torch.Tensor, torch.Tensor]:
         brdf_maps, _ = split_latent_maps(
             state,
-            n_brdf_channels=self.n_brdf_channels,
-            n_normal_channels=self.n_normal_channels,
+            n_brdf_channels=self.system.n_brdf_channels,
+            n_normal_channels=self.system.n_normal_channels,
         )
-        return render_latent_state(self, state), brdf_maps
+        return render_latent_state(self.system, state), brdf_maps
 
     def _log_metrics(self, metrics: dict[str, float | int | str]) -> None:
         line = json.dumps(metrics, sort_keys=True)
@@ -257,4 +247,4 @@ class Trainer:
         )
 
 
-__all__ = ["Trainer", "TrainerState"]
+__all__ = ["Trainer", "TrainerComponents", "TrainerConfig", "TrainerState"]

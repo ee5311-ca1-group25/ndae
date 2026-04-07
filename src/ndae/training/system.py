@@ -1,4 +1,4 @@
-"""Internal system-assembly helpers shared by train and sample CLIs."""
+"""Shared svBRDF runtime assembly for training and sampling."""
 
 from __future__ import annotations
 
@@ -22,7 +22,8 @@ from ndae.rendering import (
     unpack_brdf_diffuse_cook_torrance,
     unpack_brdf_diffuse_iso_cook_torrance,
 )
-from ndae.training.solver import SolverConfig
+
+from .solver import SolverConfig
 
 
 @dataclass(slots=True)

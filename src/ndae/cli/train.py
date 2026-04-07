@@ -7,21 +7,15 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Sequence
 
-import torch
-
 from ndae.config import NDAEConfig, load_config
-from ndae.data import ExemplarDataset, Timeline
 from ndae.losses import VGG19Features
 from ndae.training import (
-    RefreshSchedule,
-    StageConfig,
     Trainer,
+    build_trainer,
     load_resume_checkpoint,
     save_checkpoint,
 )
 from ndae.utils import create_workspace, format_run_summary, save_resolved_config
-
-from ._svbrdf_system import build_svbrdf_system
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -67,7 +61,11 @@ def run_train_cli(argv: Sequence[str] | None = None) -> int:
         print("Dry run completed.")
         return 0
 
-    trainer = build_trainer(config, workspace)
+    trainer = build_trainer(
+        config,
+        workspace,
+        vgg_features=VGG19Features(),
+    )
     if config.train.resume_from is not None:
         load_resume_checkpoint(Path(config.train.resume_from), trainer)
         print(f"Resumed from checkpoint: {Path(config.train.resume_from).resolve()}")
@@ -95,51 +93,6 @@ def apply_overrides(
         return config
 
     return replace(config, experiment=experiment, train=train)
-
-
-def build_trainer(config: NDAEConfig, workspace: Path) -> Trainer:
-    """Assemble the minimal Lecture 8 trainer from repo-level components."""
-    generator = torch.Generator().manual_seed(config.experiment.seed)
-    system = build_svbrdf_system(config)
-    dataset = ExemplarDataset.from_config(config.data, base_dir=Path.cwd())
-    timeline = Timeline.from_config(config.data)
-    stage_config = StageConfig(
-        t_init=config.data.t_I,
-        t_start=config.data.t_S,
-        t_end=config.data.t_E,
-    )
-    schedule = RefreshSchedule(stage_config, generator=generator)
-    vgg_features = VGG19Features()
-
-    def optimizer_factory() -> torch.optim.Optimizer:
-        return torch.optim.Adam(system.trajectory_model.parameters(), lr=config.train.lr)
-
-    return Trainer(
-        trajectory_model=system.trajectory_model,
-        optimizer_factory=optimizer_factory,
-        schedule=schedule,
-        stage_config=stage_config,
-        solver_config=system.solver_config,
-        exemplar_frames=dataset.frames,
-        timeline=timeline,
-        crop_size=config.data.crop_size,
-        batch_size=config.train.batch_size,
-        workspace=workspace,
-        camera=system.camera,
-        flash_light=system.flash_light,
-        renderer_pp=system.renderer_pp,
-        unpack_fn=system.unpack_fn,
-        vgg_features=vgg_features,
-        n_iter=config.train.n_iter,
-        n_init_iter=config.train.n_init_iter,
-        log_every=config.train.log_every,
-        total_channels=system.total_channels,
-        n_brdf_channels=system.n_brdf_channels,
-        n_normal_channels=system.n_normal_channels,
-        height_scale=system.height_scale,
-        gamma=system.gamma,
-        generator=generator,
-    )
 
 
 def make_checkpoint_callback(

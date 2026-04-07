@@ -10,10 +10,13 @@ import torch
 
 from ndae.config import load_config
 from ndae.data import Timeline
-from ndae.training import load_sample_checkpoint, resolve_checkpoint_dir
+from ndae.training import (
+    build_svbrdf_system,
+    load_sample_checkpoint,
+    render_latent_state,
+    resolve_checkpoint_dir,
+)
 from ndae.utils import save_png_image
-
-from ._svbrdf_system import build_svbrdf_system, render_latent_state
 
 
 def build_argparser() -> argparse.ArgumentParser:

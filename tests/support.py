@@ -14,14 +14,17 @@ from ndae.config import (
 )
 from ndae.data import Timeline
 from ndae.models import NDAEUNet, ODEFunction, TrajectoryModel
-from ndae.rendering import (
-    Camera,
-    FlashLight,
-    diffuse_cook_torrance,
-    select_renderer,
-    unpack_brdf_diffuse_cook_torrance,
+from ndae.rendering import Camera, FlashLight, select_renderer
+from ndae.training import (
+    RefreshSchedule,
+    SVBRDFSystem,
+    SolverConfig,
+    StageConfig,
+    Trainer,
+    TrainerComponents,
+    TrainerConfig,
 )
-from ndae.training import RefreshSchedule, SolverConfig, StageConfig, Trainer
+from ndae.training.system import resolve_renderer_runtime
 
 
 class DummyFeatures(nn.Module):
@@ -119,33 +122,40 @@ def make_trainer(
         refresh_rate=refresh_rate,
     )
     schedule = RefreshSchedule(stage_config, generator=generator)
+    renderer_pp, unpack_fn = resolve_renderer_runtime(config)
 
     def optimizer_factory() -> torch.optim.Optimizer:
         return torch.optim.Adam(model.parameters(), lr=config.train.lr)
 
     return Trainer(
-        trajectory_model=model,
-        optimizer_factory=optimizer_factory,
-        schedule=schedule,
-        stage_config=stage_config,
-        solver_config=SolverConfig(method="euler"),
-        exemplar_frames=exemplar_frames,
-        timeline=timeline,
-        crop_size=config.data.crop_size,
-        batch_size=config.train.batch_size,
-        workspace=workspace,
-        camera=Camera(),
-        flash_light=FlashLight(),
-        renderer_pp=diffuse_cook_torrance,
-        unpack_fn=unpack_brdf_diffuse_cook_torrance,
-        vgg_features=DummyFeatures(),
-        n_iter=config.train.n_iter,
-        n_init_iter=config.train.n_init_iter,
-        log_every=config.train.log_every,
-        total_channels=config.rendering.total_channels,
-        n_brdf_channels=config.rendering.n_brdf_channels,
-        n_normal_channels=config.rendering.n_normal_channels,
-        height_scale=config.rendering.height_scale,
-        gamma=config.rendering.gamma,
-        generator=generator,
+        components=TrainerComponents(
+            system=SVBRDFSystem(
+                trajectory_model=model,
+                solver_config=SolverConfig(method="euler"),
+                camera=Camera(),
+                flash_light=FlashLight(),
+                renderer_pp=renderer_pp,
+                unpack_fn=unpack_fn,
+                total_channels=config.rendering.total_channels,
+                n_brdf_channels=config.rendering.n_brdf_channels,
+                n_normal_channels=config.rendering.n_normal_channels,
+                height_scale=config.rendering.height_scale,
+                gamma=config.rendering.gamma,
+            ),
+            optimizer_factory=optimizer_factory,
+            schedule=schedule,
+            stage_config=stage_config,
+            vgg_features=DummyFeatures(),
+        ),
+        config=TrainerConfig(
+            exemplar_frames=exemplar_frames,
+            timeline=timeline,
+            crop_size=config.data.crop_size,
+            batch_size=config.train.batch_size,
+            workspace=workspace,
+            n_iter=config.train.n_iter,
+            n_init_iter=config.train.n_init_iter,
+            log_every=config.train.log_every,
+            generator=generator,
+        ),
     )

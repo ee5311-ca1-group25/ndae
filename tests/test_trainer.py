@@ -15,7 +15,15 @@ from ndae.rendering import (
     select_renderer,
     unpack_brdf_diffuse_cook_torrance,
 )
-from ndae.training import RefreshSchedule, SolverConfig, StageConfig, Trainer
+from ndae.training import (
+    RefreshSchedule,
+    SVBRDFSystem,
+    SolverConfig,
+    StageConfig,
+    Trainer,
+    TrainerComponents,
+    TrainerConfig,
+)
 
 
 class DummyFeatures(nn.Module):
@@ -68,30 +76,36 @@ def make_trainer(
         return torch.optim.Adam(model.parameters(), lr=1e-2)
 
     return Trainer(
-        trajectory_model=model,
-        optimizer_factory=optimizer_factory,
-        schedule=schedule,
-        stage_config=stage_config,
-        solver_config=SolverConfig(method="euler"),
-        exemplar_frames=exemplar_frames,
-        timeline=timeline,
-        crop_size=8,
-        batch_size=batch_size,
-        workspace=tmp_path,
-        camera=Camera(),
-        flash_light=FlashLight(),
-        renderer_pp=diffuse_cook_torrance,
-        unpack_fn=unpack_brdf_diffuse_cook_torrance,
-        vgg_features=DummyFeatures(),
-        n_iter=n_iter,
-        n_init_iter=n_init_iter,
-        log_every=log_every,
-        total_channels=rendering.total_channels,
-        n_brdf_channels=rendering.n_brdf_channels,
-        n_normal_channels=rendering.n_normal_channels,
-        height_scale=rendering.height_scale,
-        gamma=rendering.gamma,
-        generator=generator,
+        components=TrainerComponents(
+            system=SVBRDFSystem(
+                trajectory_model=model,
+                solver_config=SolverConfig(method="euler"),
+                camera=Camera(),
+                flash_light=FlashLight(),
+                renderer_pp=diffuse_cook_torrance,
+                unpack_fn=unpack_brdf_diffuse_cook_torrance,
+                total_channels=rendering.total_channels,
+                n_brdf_channels=rendering.n_brdf_channels,
+                n_normal_channels=rendering.n_normal_channels,
+                height_scale=rendering.height_scale,
+                gamma=rendering.gamma,
+            ),
+            optimizer_factory=optimizer_factory,
+            schedule=schedule,
+            stage_config=stage_config,
+            vgg_features=DummyFeatures(),
+        ),
+        config=TrainerConfig(
+            exemplar_frames=exemplar_frames,
+            timeline=timeline,
+            crop_size=8,
+            batch_size=batch_size,
+            workspace=tmp_path,
+            n_iter=n_iter,
+            n_init_iter=n_init_iter,
+            log_every=log_every,
+            generator=generator,
+        ),
     )
 
 

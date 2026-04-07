@@ -137,11 +137,17 @@ def test_training_package_exports_public_api() -> None:
         RolloutResult,
         RolloutWindow,
         SolverConfig,
+        SVBRDFSystem,
         StageConfig,
         Trainer,
+        TrainerComponents,
+        TrainerConfig,
         TrainerState,
+        build_svbrdf_system,
+        build_trainer,
         load_resume_checkpoint,
         load_sample_checkpoint,
+        render_latent_state,
         resolve_checkpoint_dir,
         save_checkpoint,
         rollout_generation,
@@ -166,11 +172,23 @@ def test_training_package_exports_public_api() -> None:
         rollout_warmup as rollout_warmup_impl,
         solve_rollout as solve_rollout_impl,
     )
+    from ndae.training.system import (
+        SVBRDFSystem as SVBRDFSystemImpl,
+        build_svbrdf_system as build_svbrdf_system_impl,
+        render_latent_state as render_latent_state_impl,
+    )
+    from ndae.training.factory import build_trainer as build_trainer_impl
     from ndae.training.trainer import (
         Trainer as TrainerImpl,
+        TrainerComponents as TrainerComponentsImpl,
+        TrainerConfig as TrainerConfigImpl,
         TrainerState as TrainerStateImpl,
     )
 
+    assert SVBRDFSystem is SVBRDFSystemImpl
+    assert build_svbrdf_system is build_svbrdf_system_impl
+    assert render_latent_state is render_latent_state_impl
+    assert build_trainer is build_trainer_impl
     assert SolverConfig is SolverConfigImpl
     assert RolloutResult is RolloutResultImpl
     assert solve_rollout is solve_rollout_impl
@@ -184,6 +202,8 @@ def test_training_package_exports_public_api() -> None:
     assert load_resume_checkpoint is load_resume_checkpoint_impl
     assert load_sample_checkpoint is load_sample_checkpoint_impl
     assert Trainer is TrainerImpl
+    assert TrainerComponents is TrainerComponentsImpl
+    assert TrainerConfig is TrainerConfigImpl
     assert TrainerState is TrainerStateImpl
 
 
