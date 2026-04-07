@@ -56,8 +56,16 @@ def test_losses_package_exports_public_api() -> None:
         VGG19Features,
         gram_loss,
         gram_matrix,
+        init_loss,
+        local_loss,
+        overflow_loss,
         slice_loss,
         sliced_wasserstein_loss,
+    )
+    from ndae.losses.objectives import (
+        init_loss as init_loss_impl,
+        local_loss as local_loss_impl,
+        overflow_loss as overflow_loss_impl,
     )
     from ndae.losses.perceptual import VGG19Features as VGG19FeaturesImpl
     from ndae.losses.swd import (
@@ -72,6 +80,9 @@ def test_losses_package_exports_public_api() -> None:
     assert gram_loss is gram_loss_impl
     assert sliced_wasserstein_loss is sliced_wasserstein_loss_impl
     assert slice_loss is slice_loss_impl
+    assert overflow_loss is overflow_loss_impl
+    assert init_loss is init_loss_impl
+    assert local_loss is local_loss_impl
 
 
 def test_rendering_package_exports_renderer_metadata() -> None:

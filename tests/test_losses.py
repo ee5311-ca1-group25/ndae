@@ -7,10 +7,23 @@ import ndae.losses.perceptual as perceptual
 from ndae.losses import (
     gram_loss,
     gram_matrix,
+    init_loss,
+    local_loss,
+    overflow_loss,
     slice_loss,
     sliced_wasserstein_loss,
 )
-from ndae.losses.objectives import init_loss, local_loss, overflow_loss
+from ndae.rendering import (
+    Camera,
+    FlashLight,
+    clip_maps,
+    diffuse_cook_torrance,
+    height_to_normal,
+    render_svbrdf,
+    split_latent_maps,
+    tonemapping,
+    unpack_brdf_diffuse_cook_torrance,
+)
 
 
 def patch_vgg19(monkeypatch: pytest.MonkeyPatch) -> list[VGG19_Weights]:
@@ -354,3 +367,29 @@ def test_local_loss_rejects_unknown_mode(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with pytest.raises(ValueError, match="Unknown loss_type"):
         local_loss(model, rendered, target, loss_type="swd")
+
+
+def test_full_pipeline_gradient(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    z = torch.randn(18, 32, 32, dtype=torch.float32, requires_grad=True)
+
+    brdf_maps, height_map = split_latent_maps(z, n_brdf_channels=8, n_normal_channels=1)
+    normal_map = height_to_normal(height_map)
+    rendered = render_svbrdf(
+        clip_maps(brdf_maps),
+        normal_map,
+        Camera(),
+        FlashLight(),
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+    )
+    tone_mapped = tonemapping(rendered).unsqueeze(0)
+    target = tone_mapped.detach().roll(shifts=1, dims=-1)
+
+    loss = local_loss(model, tone_mapped, target, loss_type="gram")
+    loss.backward()
+
+    assert z.grad is not None
+    assert not torch.isnan(z.grad).any()
