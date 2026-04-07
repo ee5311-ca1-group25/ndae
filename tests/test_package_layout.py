@@ -138,6 +138,8 @@ def test_training_package_exports_public_api() -> None:
         RolloutWindow,
         SolverConfig,
         StageConfig,
+        rollout_generation,
+        rollout_warmup,
         solve_rollout,
     )
     from ndae.training.schedule import (
@@ -148,12 +150,16 @@ def test_training_package_exports_public_api() -> None:
     from ndae.training.solver import (
         RolloutResult as RolloutResultImpl,
         SolverConfig as SolverConfigImpl,
+        rollout_generation as rollout_generation_impl,
+        rollout_warmup as rollout_warmup_impl,
         solve_rollout as solve_rollout_impl,
     )
 
     assert SolverConfig is SolverConfigImpl
     assert RolloutResult is RolloutResultImpl
     assert solve_rollout is solve_rollout_impl
+    assert rollout_warmup is rollout_warmup_impl
+    assert rollout_generation is rollout_generation_impl
     assert StageConfig is StageConfigImpl
     assert RolloutWindow is RolloutWindowImpl
     assert RefreshSchedule is RefreshScheduleImpl
