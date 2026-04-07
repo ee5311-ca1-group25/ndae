@@ -29,7 +29,7 @@ def test_dry_run_creates_workspace_and_resolved_config(tmp_path: Path, capsys) -
 
     assert exit_code == 0
 
-    workspace = tmp_path / "lecture1_smoke"
+    workspace = tmp_path / "smoke_run"
     resolved_config = workspace / "config.resolved.yaml"
 
     assert workspace.is_dir()
@@ -44,7 +44,7 @@ def test_dry_run_creates_workspace_and_resolved_config(tmp_path: Path, capsys) -
     assert "Dry run completed." in output
 
     resolved_text = resolved_config.read_text(encoding="utf-8")
-    assert "lecture1_smoke" in resolved_text
+    assert "smoke_run" in resolved_text
     assert "exemplar: clay_solidifying" in resolved_text
     assert "rendering:" in resolved_text
     assert "renderer_type: diffuse_cook_torrance" in resolved_text
@@ -105,7 +105,7 @@ def test_non_dry_run_cli_executes_trainer_and_writes_metrics(
     config_path.write_text(
         f"""
 experiment:
-  name: lecture8_cli_smoke
+  name: cli_smoke
   output_root: {tmp_path}
   seed: 7
 
@@ -153,7 +153,7 @@ train:
 
     assert exit_code == 0
 
-    workspace = tmp_path / "lecture8_cli_smoke"
+    workspace = tmp_path / "cli_smoke"
     metrics_path = workspace / "metrics.jsonl"
     resolved_config = workspace / "config.resolved.yaml"
 

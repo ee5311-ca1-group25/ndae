@@ -4,7 +4,7 @@ import torch
 from ndae.training.schedule import RefreshSchedule, RolloutWindow, StageConfig
 
 
-def test_stage_config_defaults_match_lecture7_plan() -> None:
+def test_stage_config_defaults_match_runtime_defaults() -> None:
     config = StageConfig()
 
     assert config.t_init == pytest.approx(-2.0)

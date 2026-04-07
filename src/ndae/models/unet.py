@@ -1,4 +1,4 @@
-"""UNet assembly for Lecture 5 NDAE models."""
+"""UNet assembly for NDAE models."""
 
 from __future__ import annotations
 

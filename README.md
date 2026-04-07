@@ -1,14 +1,10 @@
 # NDAE
 
-Pytorch implementation of the paper "Neural Differential Appearance Equations"
+PyTorch implementation of the paper "Neural Differential Appearance Equations".
 
-This repository is being built incrementally as a course project. The current
-state corresponds to Lecture 4 Phase C: the Lecture 3 rendering pipeline is in
-place, and the loss stack now has a frozen `VGG19Features` perceptual extractor
-plus both Gram-based and sliced-Wasserstein texture statistics under
-`ndae.losses`. The rendering core is split across `rendering/geometry.py`,
-`rendering/brdf.py`, `rendering/postprocess.py`, and `rendering/renderer.py`;
-objective losses and the full training pipeline are not implemented yet.
+The repository includes config loading, exemplar sampling, differentiable
+svBRDF rendering, perceptual/statistical losses, a minimal training runtime,
+checkpoint save-resume flow, and checkpoint-based sampling.
 
 ## Documentation
 
@@ -41,7 +37,7 @@ uv sync
 
 This creates a local virtual environment in .venv and installs all dependencies from pyproject.toml.
 
-### 3. Run the Lecture 1 Dry Run
+### 3. Run a Dry Run
 
 ~~~bash
 uv run python main.py --config configs/base.yaml --dry-run
@@ -61,7 +57,31 @@ The dry run will:
 - print a run summary,
 - exit without training.
 
-### 4. Download a Mini SVBRDF Subset
+### 4. Train on the Full `clay_solidifying` Sequence
+
+The full-sequence config uses all 100 frames listed in
+`data_local/svbrdf_full/clay_solidifying/_manifest.json`.
+
+~~~bash
+uv run python scripts/train_svbrdf.py --config configs/full_clay.yaml
+~~~
+
+After training, sample from the latest refresh-boundary checkpoint:
+
+~~~bash
+uv run python scripts/sample_svbrdf.py \
+  --checkpoint outputs/full_clay_solidifying/checkpoints/latest
+~~~
+
+Render a static loss plot from the recorded metrics:
+
+~~~bash
+uv run python scripts/plot_metrics.py \
+  outputs/full_clay_solidifying/metrics.jsonl \
+  --output outputs/full_clay_solidifying/loss_curve.png
+~~~
+
+### 5. Download a Mini SVBRDF Subset
 
 This project includes a helper script that samples a tiny local subset from the
 official `SVBRDF_dynamic_flash_textures.zip` without downloading the full 11.96GB
@@ -109,7 +129,7 @@ uv run python scripts/download_svbrdf_mini.py \
 This is the preferred fallback when the repository site blocks Playwright with
 `403 Forbidden`.
 
-### 5. Run Tests
+### 6. Run Tests
 
 ~~~bash
 uv run pytest
@@ -121,7 +141,7 @@ For the current rendering-helper slice, the narrow regression command is:
 uv run pytest tests/test_renderer.py tests/test_package_layout.py tests/test_config.py -q
 ~~~
 
-### 6. Render a Synthetic svBRDF Example
+### 7. Render a Synthetic svBRDF Example
 
 ~~~bash
 uv run python scripts/render_svbrdf_example.py \
@@ -143,7 +163,7 @@ These presets use smoother, more physically intuitive BRDF maps so the
 highlights look closer to painted plastic and coated metal than the earlier
 debug-pattern example.
 
-### 7. Optional: activate the venv manually
+### 8. Optional: activate the venv manually
 
 If you prefer an activated shell:
 

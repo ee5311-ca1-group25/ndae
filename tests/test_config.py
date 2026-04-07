@@ -84,7 +84,7 @@ def test_base_config_loads_into_dataclasses() -> None:
     assert isinstance(config.model, ModelConfig)
     assert isinstance(config.rendering, RenderingConfig)
     assert isinstance(config.train, TrainConfig)
-    assert config.experiment.name == "lecture1_smoke"
+    assert config.experiment.name == "smoke_run"
     assert config.data.root == "data_local/svbrdf_mini"
     assert config.data.exemplar == "clay_solidifying"
     assert config.data.n_frames == 8
@@ -116,7 +116,7 @@ def test_debug_config_loads_without_dataset_validation() -> None:
         validate_dataset=False,
     )
 
-    assert config.experiment.name == "lecture09_debug_clay"
+    assert config.experiment.name == "debug_clay"
     assert config.data.root == "data_local/svbrdf_full"
     assert config.data.exemplar == "clay_solidifying"
     assert config.data.n_frames == 16
@@ -193,6 +193,23 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
     }
 
 
+def test_full_clay_config_loads_without_dataset_validation() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    config = load_config(
+        project_root / "configs" / "full_clay.yaml",
+        validate_dataset=False,
+    )
+
+    assert config.experiment.name == "full_clay_solidifying"
+    assert config.data.root == "data_local/svbrdf_full"
+    assert config.data.exemplar == "clay_solidifying"
+    assert config.data.n_frames == 100
+    assert config.train.dry_run is False
+    assert config.train.n_iter == 121
+    assert config.train.n_init_iter == 8
+    assert config.train.sample_size == 128
+
+
 def test_load_config_supports_default_rendering_block(tmp_path: Path) -> None:
     exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
     write_frame(exemplar_dir / "frame_0000.jpg")
@@ -201,7 +218,7 @@ def test_load_config_supports_default_rendering_block(tmp_path: Path) -> None:
     config_path.write_text(
         f"""
 experiment:
-  name: lecture1_smoke
+  name: smoke_run
   output_root: outputs
   seed: 42
 
@@ -303,7 +320,7 @@ def test_load_config_rejects_unknown_keys(tmp_path: Path) -> None:
     config_path.write_text(
         """
 experiment:
-  name: lecture1_smoke
+  name: smoke_run
   output_root: outputs
   seed: 42
 
@@ -342,7 +359,7 @@ def test_load_config_rejects_legacy_model_n_aug_channels(tmp_path: Path) -> None
     config_path.write_text(
         """
 experiment:
-  name: lecture1_smoke
+  name: smoke_run
   output_root: outputs
   seed: 42
 
@@ -383,7 +400,7 @@ def test_load_config_rejects_invalid_renderer_type(tmp_path: Path) -> None:
     config_path.write_text(
         f"""
 experiment:
-  name: lecture1_smoke
+  name: smoke_run
   output_root: outputs
   seed: 42
 
@@ -426,7 +443,7 @@ def test_load_config_rejects_invalid_light_xy_position(tmp_path: Path) -> None:
     config_path.write_text(
         f"""
 experiment:
-  name: lecture1_smoke
+  name: smoke_run
   output_root: outputs
   seed: 42
 
@@ -555,7 +572,7 @@ def test_load_config_rejects_unknown_train_keys(tmp_path: Path) -> None:
     config_path.write_text(
         f"""
 experiment:
-  name: lecture1_smoke
+  name: smoke_run
   output_root: outputs
   seed: 42
 

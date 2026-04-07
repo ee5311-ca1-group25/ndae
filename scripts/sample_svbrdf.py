@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin script entry point for Lecture 8 checkpoint sampling."""
+"""Thin script entry point for checkpoint sampling."""
 
 from __future__ import annotations
 

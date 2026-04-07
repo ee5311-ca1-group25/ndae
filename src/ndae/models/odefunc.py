@@ -1,4 +1,4 @@
-"""ODE function adapter for Lecture 6 NDAE models."""
+"""ODE function adapter for NDAE models."""
 
 from __future__ import annotations
 

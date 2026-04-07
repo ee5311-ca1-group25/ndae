@@ -1,39 +1,38 @@
 experiment:
-  name: debug_clay
+  name: smoke_run
   output_root: outputs
   seed: 42
-
 data:
-  root: data_local/svbrdf_full
+  root: data_local/svbrdf_mini
   exemplar: clay_solidifying
   image_size: 256
   crop_size: 128
-  n_frames: 16
+  n_frames: 8
   t_I: -2.0
   t_S: 0.0
   t_E: 10.0
-
 model:
   dim: 64
   solver: heun
-
 rendering:
   renderer_type: diffuse_cook_torrance
+  n_brdf_channels: 8
   n_normal_channels: 1
   n_aug_channels: 9
   camera_fov: 50.0
   camera_distance: 1.0
   light_intensity: 0.0
-  light_xy_position: [0.0, 0.0]
+  light_xy_position:
+  - 0.0
+  - 0.0
   height_scale: 1.0
   gamma: 2.2
-
 train:
   batch_size: 1
   lr: 0.0005
-  dry_run: false
-  n_iter: 7
-  n_init_iter: 2
+  dry_run: true
+  n_iter: 2
+  n_init_iter: 1
   log_every: 1
   checkpoint_every: 1
   sample_every: 1

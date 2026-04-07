@@ -1,4 +1,4 @@
-"""Time embedding modules for Lecture 5 NDAE models."""
+"""Time embedding modules for NDAE models."""
 
 from __future__ import annotations
 

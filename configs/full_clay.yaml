@@ -1,5 +1,5 @@
 experiment:
-  name: debug_clay
+  name: full_clay_solidifying
   output_root: outputs
   seed: 42
 
@@ -8,7 +8,7 @@ data:
   exemplar: clay_solidifying
   image_size: 256
   crop_size: 128
-  n_frames: 16
+  n_frames: 100
   t_I: -2.0
   t_S: 0.0
   t_E: 10.0
@@ -32,10 +32,10 @@ train:
   batch_size: 1
   lr: 0.0005
   dry_run: false
-  n_iter: 7
-  n_init_iter: 2
+  n_iter: 121
+  n_init_iter: 8
   log_every: 1
   checkpoint_every: 1
   sample_every: 1
-  sample_size: 64
+  sample_size: 128
   resume_from: null

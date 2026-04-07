@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin script entry point for Lecture 8 training."""
+"""Thin script entry point for training."""
 
 from __future__ import annotations
 

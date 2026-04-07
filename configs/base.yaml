@@ -1,5 +1,5 @@
 experiment:
-  name: lecture1_smoke
+  name: smoke_run
   output_root: outputs
   seed: 42
 

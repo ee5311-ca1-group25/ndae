@@ -1,4 +1,4 @@
-"""Lecture 8 training CLI."""
+"""Training CLI."""
 
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ from ndae.utils import create_workspace, format_run_summary, save_resolved_confi
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Build the Lecture 8 train CLI parser."""
+    """Build the train CLI parser."""
     parser = argparse.ArgumentParser(
-        description="NDAE Lecture 8 train entry point.",
+        description="NDAE training entry point.",
     )
     parser.add_argument(
         "--config",
@@ -42,7 +42,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
 
 def run_train_cli(argv: Sequence[str] | None = None) -> int:
-    """Run the Lecture 8 train entry point."""
+    """Run the train entry point."""
     parser = build_argparser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 

@@ -1,4 +1,4 @@
-"""Minimal trainer runtime for Lecture 8."""
+"""Minimal trainer runtime."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from .system import SVBRDFSystem, render_latent_state
 
 @dataclass(slots=True)
 class TrainerState:
-    """Minimal runtime state carried across Lecture 8 training steps."""
+    """Minimal runtime state carried across training steps."""
 
     global_step: int
     stage: Literal["init", "local"]

@@ -1,4 +1,4 @@
-"""Lecture 8 sample CLI."""
+"""Checkpoint sampling CLI."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ from ndae.utils import save_png_image
 
 
 def build_argparser() -> argparse.ArgumentParser:
-    """Build the Lecture 8 sample CLI parser."""
+    """Build the sample CLI parser."""
     parser = argparse.ArgumentParser(
-        description="NDAE Lecture 8 checkpoint sampling entry point.",
+        description="NDAE checkpoint sampling entry point.",
     )
     parser.add_argument(
         "--checkpoint",

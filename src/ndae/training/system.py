@@ -88,7 +88,7 @@ def resolve_solver_method(solver: str) -> str:
     if solver == "euler":
         return "euler"
     raise ValueError(
-        "Unsupported model.solver for Lecture 8 trainer: "
+        "Unsupported model.solver for the training runtime: "
         f"{solver!r}. Expected 'heun' or 'euler'."
     )
 
@@ -102,7 +102,7 @@ def resolve_renderer_runtime(
     if renderer_type == "diffuse_iso_cook_torrance":
         return diffuse_iso_cook_torrance, unpack_brdf_diffuse_iso_cook_torrance
     raise ValueError(
-        "Lecture 8 non-dry-run training only supports renderer_type "
+        "Non-dry-run training only supports renderer_type "
         "'diffuse_cook_torrance' and 'diffuse_iso_cook_torrance', got "
         f"{renderer_type!r}."
     )

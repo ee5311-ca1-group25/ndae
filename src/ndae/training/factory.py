@@ -1,4 +1,4 @@
-"""Factory helpers for assembling Lecture 8 training runtime."""
+"""Factory helpers for assembling the training runtime."""
 
 from __future__ import annotations
 

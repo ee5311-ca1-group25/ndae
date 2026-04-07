@@ -1,4 +1,4 @@
-"""Building blocks for Lecture 5 NDAE models."""
+"""Building blocks for NDAE models."""
 
 from __future__ import annotations
 

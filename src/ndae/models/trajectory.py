@@ -1,4 +1,4 @@
-"""Trajectory integration wrapper for Lecture 6 NDAE models."""
+"""Trajectory integration wrapper for NDAE models."""
 
 from __future__ import annotations
 

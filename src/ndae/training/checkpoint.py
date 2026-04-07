@@ -1,4 +1,4 @@
-"""Checkpoint helpers for Lecture 8 training and sampling."""
+"""Checkpoint helpers for training and sampling."""
 
 from __future__ import annotations
 

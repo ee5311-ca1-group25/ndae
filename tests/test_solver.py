@@ -17,7 +17,7 @@ def make_trajectory_model() -> TrajectoryModel:
     return TrajectoryModel(ODEFunction(model))
 
 
-def test_solver_config_defaults_match_lecture7_plan() -> None:
+def test_solver_config_defaults_match_runtime_defaults() -> None:
     config = SolverConfig()
 
     assert config.method == "adaptive_heun"
