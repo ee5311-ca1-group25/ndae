@@ -52,13 +52,26 @@ def test_data_package_exports_public_api() -> None:
 
 
 def test_losses_package_exports_public_api() -> None:
-    from ndae.losses import VGG19Features, gram_loss, gram_matrix
+    from ndae.losses import (
+        VGG19Features,
+        gram_loss,
+        gram_matrix,
+        slice_loss,
+        sliced_wasserstein_loss,
+    )
     from ndae.losses.perceptual import VGG19Features as VGG19FeaturesImpl
-    from ndae.losses.swd import gram_loss as gram_loss_impl, gram_matrix as gram_matrix_impl
+    from ndae.losses.swd import (
+        gram_loss as gram_loss_impl,
+        gram_matrix as gram_matrix_impl,
+        slice_loss as slice_loss_impl,
+        sliced_wasserstein_loss as sliced_wasserstein_loss_impl,
+    )
 
     assert VGG19Features is VGG19FeaturesImpl
     assert gram_matrix is gram_matrix_impl
     assert gram_loss is gram_loss_impl
+    assert sliced_wasserstein_loss is sliced_wasserstein_loss_impl
+    assert slice_loss is slice_loss_impl
 
 
 def test_rendering_package_exports_renderer_metadata() -> None:

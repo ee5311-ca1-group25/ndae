@@ -4,7 +4,12 @@ import torch.nn as nn
 from torchvision.models import VGG19_Weights, vgg19 as torchvision_vgg19
 
 import ndae.losses.perceptual as perceptual
-from ndae.losses import gram_loss, gram_matrix
+from ndae.losses import (
+    gram_loss,
+    gram_matrix,
+    slice_loss,
+    sliced_wasserstein_loss,
+)
 
 
 def patch_vgg19(monkeypatch: pytest.MonkeyPatch) -> list[VGG19_Weights]:
@@ -135,3 +140,113 @@ def test_gram_loss_gradient_to_sample(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert sample.grad is not None
     assert not torch.isnan(sample.grad).any()
+
+
+def test_swd_same_input_zero() -> None:
+    feature = torch.randn(32, 8, 8)
+
+    loss = sliced_wasserstein_loss(feature, feature)
+
+    assert loss.shape == ()
+    assert loss.item() < 1e-6
+
+
+def test_swd_diff_input_positive() -> None:
+    exemplar = torch.zeros(32, 8, 8)
+    sample = torch.ones(32, 8, 8)
+
+    loss = sliced_wasserstein_loss(exemplar, sample)
+
+    assert loss.item() > 0.0
+
+
+def test_swd_resizes_exemplar_projection_length() -> None:
+    exemplar = torch.randn(32, 7, 7)
+    sample = torch.randn(32, 9, 9)
+
+    loss = sliced_wasserstein_loss(exemplar, sample)
+
+    assert loss.ndim == 0
+    assert loss.item() >= 0.0
+
+
+def test_swd_reproducible() -> None:
+    exemplar = torch.randn(32, 8, 8)
+    sample = torch.randn(32, 8, 8)
+
+    generator_a = torch.Generator().manual_seed(42)
+    generator_b = torch.Generator().manual_seed(42)
+
+    loss_a = sliced_wasserstein_loss(exemplar, sample, generator=generator_a)
+    loss_b = sliced_wasserstein_loss(exemplar, sample, generator=generator_b)
+
+    assert torch.allclose(loss_a, loss_b)
+
+
+def test_swd_rejects_invalid_rank() -> None:
+    with pytest.raises(ValueError, match="expects inputs shaped"):
+        sliced_wasserstein_loss(torch.randn(8, 8), torch.randn(8, 8))
+
+
+def test_swd_rejects_channel_mismatch() -> None:
+    with pytest.raises(ValueError, match="matching channel counts"):
+        sliced_wasserstein_loss(torch.randn(16, 8, 8), torch.randn(32, 8, 8))
+
+
+def test_slice_loss_gradient_backward(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    exemplar = torch.rand(1, 3, 64, 64)
+    sample = torch.rand(1, 3, 64, 64, requires_grad=True)
+
+    loss = slice_loss(model, exemplar, sample, generator=torch.Generator().manual_seed(7))
+    loss.backward()
+
+    assert sample.grad is not None
+    assert not torch.isnan(sample.grad).any()
+
+
+def test_slice_loss_reproducible(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    exemplar = torch.rand(1, 3, 64, 64)
+    sample = torch.rand(1, 3, 64, 64)
+
+    loss_a = slice_loss(
+        model,
+        exemplar,
+        sample,
+        generator=torch.Generator().manual_seed(42),
+    )
+    loss_b = slice_loss(
+        model,
+        exemplar,
+        sample,
+        generator=torch.Generator().manual_seed(42),
+    )
+
+    assert torch.allclose(loss_a, loss_b)
+
+
+def test_slice_loss_rejects_invalid_weight_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    exemplar = torch.rand(1, 3, 64, 64)
+    sample = torch.rand(1, 3, 64, 64)
+
+    with pytest.raises(ValueError, match="expects 6 weights"):
+        slice_loss(model, exemplar, sample, weights=[1.0, 1.0])
+
+
+def test_slice_loss_rejects_non_positive_weight_sum(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    exemplar = torch.rand(1, 3, 64, 64)
+    sample = torch.rand(1, 3, 64, 64)
+
+    with pytest.raises(ValueError, match="positive sum"):
+        slice_loss(model, exemplar, sample, weights=[0.0] * 6)

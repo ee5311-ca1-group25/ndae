@@ -3,12 +3,12 @@
 Pytorch implementation of the paper "Neural Differential Appearance Equations"
 
 This repository is being built incrementally as a course project. The current
-state corresponds to Lecture 4 Phase B: the Lecture 3 rendering pipeline is in
+state corresponds to Lecture 4 Phase C: the Lecture 3 rendering pipeline is in
 place, and the loss stack now has a frozen `VGG19Features` perceptual extractor
-plus Gram-based texture statistics under `ndae.losses`. The rendering core is
-split across `rendering/geometry.py`, `rendering/brdf.py`,
-`rendering/postprocess.py`, and `rendering/renderer.py`; SWD/objective losses
-and the full training pipeline are not implemented yet.
+plus both Gram-based and sliced-Wasserstein texture statistics under
+`ndae.losses`. The rendering core is split across `rendering/geometry.py`,
+`rendering/brdf.py`, `rendering/postprocess.py`, and `rendering/renderer.py`;
+objective losses and the full training pipeline are not implemented yet.
 
 ## Documentation
 
