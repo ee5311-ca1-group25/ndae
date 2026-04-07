@@ -8,6 +8,7 @@ import torch.nn as nn
 
 import ndae.cli.train as train_cli
 from ndae.cli.render_example import run_render_example_cli
+from ndae.cli.sample import run_sample_cli
 from ndae.cli.train import run_train_cli
 from tests.support import write_image
 
@@ -235,6 +236,97 @@ train:
     assert (latest / "optimizer.pt").is_file()
     assert (latest / "trainer_state.pt").is_file()
     assert (latest / "meta.json").is_file()
+
+
+def test_train_checkpoint_sample_closes_loop_on_toy_setup(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(train_cli, "VGG19Features", DummyFeatures)
+
+    data_root = tmp_path / "data_root"
+    exemplar_dir = data_root / "example"
+    write_image(exemplar_dir / "frame_0000.png", size=(24, 24), color=(20, 40, 60))
+    write_image(exemplar_dir / "frame_0001.png", size=(24, 24), color=(60, 80, 100))
+    write_image(exemplar_dir / "frame_0002.png", size=(24, 24), color=(100, 120, 140))
+
+    config_path = tmp_path / "loop_train.yaml"
+    config_path.write_text(
+        f"""
+experiment:
+  name: loop_smoke
+  output_root: {tmp_path}
+  seed: 7
+
+data:
+  root: {data_root}
+  exemplar: example
+  image_size: 16
+  crop_size: 8
+  n_frames: 3
+  t_I: -2.0
+  t_S: 0.0
+  t_E: 2.0
+
+model:
+  dim: 8
+  solver: euler
+
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position: [0.0, 0.0]
+  height_scale: 1.0
+  gamma: 2.2
+
+train:
+  batch_size: 1
+  lr: 0.001
+  dry_run: false
+  n_iter: 7
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 10
+  resume_from: null
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert run_train_cli(["--config", str(config_path)]) == 0
+
+    workspace = tmp_path / "loop_smoke"
+    latest = workspace / "checkpoints" / "latest"
+    assert latest.is_dir()
+
+    train_output = capsys.readouterr().out
+    assert "Training completed." in train_output
+
+    assert run_sample_cli(["--checkpoint", str(latest)]) == 0
+
+    output_dir = workspace / "samples" / "latest"
+    frame_paths = sorted(output_dir.glob("frames_*.png"))
+
+    assert output_dir.is_dir()
+    assert [path.name for path in frame_paths] == [
+        "frames_0000.png",
+        "frames_0001.png",
+        "frames_0002.png",
+    ]
+    with Image.open(frame_paths[0]) as image:
+        assert image.size == (10, 10)
+
+    sample_output = capsys.readouterr().out
+    assert "Sample generation completed." in sample_output
+    assert str(latest.resolve()) in sample_output
+    assert "frames: 3" in sample_output
+    assert "sample_size: 10" in sample_output
 
 
 def test_resume_cli_appends_metrics_jsonl(
