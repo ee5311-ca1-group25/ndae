@@ -8,6 +8,7 @@ from .solver import (
     rollout_warmup,
     solve_rollout,
 )
+from .trainer import Trainer, TrainerState
 
 __all__ = [
     "SolverConfig",
@@ -18,4 +19,6 @@ __all__ = [
     "StageConfig",
     "RolloutWindow",
     "RefreshSchedule",
+    "Trainer",
+    "TrainerState",
 ]

@@ -138,6 +138,8 @@ def test_training_package_exports_public_api() -> None:
         RolloutWindow,
         SolverConfig,
         StageConfig,
+        Trainer,
+        TrainerState,
         rollout_generation,
         rollout_warmup,
         solve_rollout,
@@ -154,6 +156,10 @@ def test_training_package_exports_public_api() -> None:
         rollout_warmup as rollout_warmup_impl,
         solve_rollout as solve_rollout_impl,
     )
+    from ndae.training.trainer import (
+        Trainer as TrainerImpl,
+        TrainerState as TrainerStateImpl,
+    )
 
     assert SolverConfig is SolverConfigImpl
     assert RolloutResult is RolloutResultImpl
@@ -163,6 +169,8 @@ def test_training_package_exports_public_api() -> None:
     assert StageConfig is StageConfigImpl
     assert RolloutWindow is RolloutWindowImpl
     assert RefreshSchedule is RefreshScheduleImpl
+    assert Trainer is TrainerImpl
+    assert TrainerState is TrainerStateImpl
 
 
 def test_rendering_package_exports_renderer_metadata() -> None:
