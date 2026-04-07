@@ -42,6 +42,16 @@ def validate_config(config: NDAEConfig, *, base_dir: str | Path | None = None) -
     ensure_positive_int(config.train.batch_size, "train.batch_size")
     ensure_positive_float(config.train.lr, "train.lr")
     ensure_bool(config.train.dry_run, "train.dry_run")
+    ensure_positive_int(config.train.n_iter, "train.n_iter")
+    ensure_non_negative_int(config.train.n_init_iter, "train.n_init_iter")
+    if config.train.n_init_iter > config.train.n_iter:
+        raise ConfigError("train.n_init_iter must be less than or equal to train.n_iter")
+    ensure_positive_int(config.train.log_every, "train.log_every")
+    ensure_positive_int(config.train.checkpoint_every, "train.checkpoint_every")
+    ensure_positive_int(config.train.sample_every, "train.sample_every")
+    ensure_positive_int(config.train.sample_size, "train.sample_size")
+    if config.train.resume_from is not None:
+        ensure_non_empty_string(config.train.resume_from, "train.resume_from")
 
 
 def validate_rendering_config(config: NDAEConfig) -> None:

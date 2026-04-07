@@ -53,6 +53,13 @@ class TrainConfig:
     batch_size: int
     lr: float
     dry_run: bool
+    n_iter: int
+    n_init_iter: int
+    log_every: int
+    checkpoint_every: int
+    sample_every: int
+    sample_size: int
+    resume_from: str | None = None
 
 
 @dataclass(slots=True)

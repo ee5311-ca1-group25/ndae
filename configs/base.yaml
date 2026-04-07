@@ -32,3 +32,10 @@ train:
   batch_size: 1
   lr: 0.0005
   dry_run: true
+  n_iter: 2
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 64
+  resume_from: null

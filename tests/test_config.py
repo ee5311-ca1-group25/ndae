@@ -54,7 +54,18 @@ def make_config(
         ),
         model=ModelConfig(dim=64, solver="heun"),
         rendering=rendering or make_rendering_config(),
-        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
+        train=TrainConfig(
+            batch_size=1,
+            lr=0.001,
+            dry_run=True,
+            n_iter=2,
+            n_init_iter=1,
+            log_every=1,
+            checkpoint_every=1,
+            sample_every=1,
+            sample_size=64,
+            resume_from=None,
+        ),
     )
 
 
@@ -89,6 +100,13 @@ def test_base_config_loads_into_dataclasses() -> None:
     assert config.rendering.light_xy_position == (0.0, 0.0)
     assert config.rendering.total_channels == 18
     assert config.train.dry_run is True
+    assert config.train.n_iter == 2
+    assert config.train.n_init_iter == 1
+    assert config.train.log_every == 1
+    assert config.train.checkpoint_every == 1
+    assert config.train.sample_every == 1
+    assert config.train.sample_size == 64
+    assert config.train.resume_from is None
 
 
 def test_to_dict_returns_plain_dictionary_tree() -> None:
@@ -103,7 +121,18 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
         ),
         model=ModelConfig(dim=64, solver="heun"),
         rendering=make_rendering_config(),
-        train=TrainConfig(batch_size=1, lr=0.001, dry_run=True),
+        train=TrainConfig(
+            batch_size=1,
+            lr=0.001,
+            dry_run=True,
+            n_iter=2,
+            n_init_iter=1,
+            log_every=1,
+            checkpoint_every=1,
+            sample_every=1,
+            sample_size=64,
+            resume_from=None,
+        ),
     )
 
     assert to_dict(config) == {
@@ -131,7 +160,18 @@ def test_to_dict_returns_plain_dictionary_tree() -> None:
             "height_scale": 1.0,
             "gamma": 2.2,
         },
-        "train": {"batch_size": 1, "lr": 0.001, "dry_run": True},
+        "train": {
+            "batch_size": 1,
+            "lr": 0.001,
+            "dry_run": True,
+            "n_iter": 2,
+            "n_init_iter": 1,
+            "log_every": 1,
+            "checkpoint_every": 1,
+            "sample_every": 1,
+            "sample_size": 64,
+            "resume_from": None,
+        },
     }
 
 
@@ -162,6 +202,12 @@ train:
   batch_size: 1
   lr: 0.0005
   dry_run: true
+  n_iter: 2
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 64
 """.strip(),
         encoding="utf-8",
     )
@@ -173,6 +219,7 @@ train:
     assert config.rendering.renderer_type == "diffuse_cook_torrance"
     assert config.rendering.n_brdf_channels == 8
     assert config.rendering.total_channels == 18
+    assert config.train.resume_from is None
 
 
 def test_validate_config_rejects_invalid_semantics(tmp_path: Path) -> None:
@@ -258,6 +305,12 @@ train:
   batch_size: 1
   lr: 0.0005
   dry_run: true
+  n_iter: 2
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 64
 """.strip(),
         encoding="utf-8",
     )
@@ -291,6 +344,12 @@ train:
   batch_size: 1
   lr: 0.0005
   dry_run: true
+  n_iter: 2
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 64
 """.strip(),
         encoding="utf-8",
     )
@@ -328,6 +387,12 @@ train:
   batch_size: 1
   lr: 0.0005
   dry_run: true
+  n_iter: 2
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 64
 """.strip(),
         encoding="utf-8",
     )
@@ -415,3 +480,92 @@ def test_validate_config_rejects_invalid_timeline_ordering(tmp_path: Path) -> No
 
     with pytest.raises(ConfigError, match="t_I < t_S < t_E"):
         validate_config(config)
+
+
+def test_validate_config_rejects_n_init_iter_greater_than_n_iter(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config = make_config(root=str(tmp_path / "svbrdf_mini"))
+    config.train = replace(config.train, n_iter=2, n_init_iter=3)
+
+    with pytest.raises(ConfigError, match="train.n_init_iter must be less than or equal to train.n_iter"):
+        validate_config(config)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "message"),
+    [
+        ("log_every", 0, "train.log_every"),
+        ("checkpoint_every", 0, "train.checkpoint_every"),
+        ("sample_every", 0, "train.sample_every"),
+        ("sample_size", 0, "train.sample_size"),
+    ],
+)
+def test_validate_config_rejects_non_positive_train_runtime_fields(
+    tmp_path: Path,
+    field_name: str,
+    field_value: int,
+    message: str,
+) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config = make_config(root=str(tmp_path / "svbrdf_mini"))
+    config.train = replace(config.train, **{field_name: field_value})
+
+    with pytest.raises(ConfigError, match=message):
+        validate_config(config)
+
+
+def test_validate_config_rejects_empty_resume_from(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config = make_config(root=str(tmp_path / "svbrdf_mini"))
+    config.train = replace(config.train, resume_from="")
+
+    with pytest.raises(ConfigError, match="train.resume_from"):
+        validate_config(config)
+
+
+def test_load_config_rejects_unknown_train_keys(tmp_path: Path) -> None:
+    exemplar_dir = tmp_path / "svbrdf_mini" / "clay_solidifying"
+    write_frame(exemplar_dir / "frame_0000.jpg")
+
+    config_path = tmp_path / "invalid_train.yaml"
+    config_path.write_text(
+        f"""
+experiment:
+  name: lecture1_smoke
+  output_root: outputs
+  seed: 42
+
+data:
+  root: {tmp_path / "svbrdf_mini"}
+  exemplar: clay_solidifying
+  image_size: 256
+  crop_size: 128
+  n_frames: 1
+
+model:
+  dim: 64
+  solver: heun
+
+train:
+  batch_size: 1
+  lr: 0.0005
+  dry_run: true
+  n_iter: 2
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 64
+  extra_train_flag: true
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="unknown keys: extra_train_flag"):
+        load_config(config_path)

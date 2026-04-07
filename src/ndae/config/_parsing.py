@@ -165,11 +165,38 @@ def build_rendering_config(payload: Mapping[str, Any]) -> RenderingConfig:
 
 
 def build_train_config(payload: Mapping[str, Any]) -> TrainConfig:
-    expect_keys(payload, "train", {"batch_size", "lr", "dry_run"})
+    expect_keys(
+        payload,
+        "train",
+        {
+            "batch_size",
+            "lr",
+            "dry_run",
+            "n_iter",
+            "n_init_iter",
+            "log_every",
+            "checkpoint_every",
+            "sample_every",
+            "sample_size",
+        },
+        optional={"resume_from"},
+    )
     return TrainConfig(
         batch_size=read_int(payload, "batch_size", "train"),
         lr=read_float(payload, "lr", "train"),
         dry_run=read_bool(payload, "dry_run", "train"),
+        n_iter=read_int(payload, "n_iter", "train"),
+        n_init_iter=read_int(payload, "n_init_iter", "train"),
+        log_every=read_int(payload, "log_every", "train"),
+        checkpoint_every=read_int(payload, "checkpoint_every", "train"),
+        sample_every=read_int(payload, "sample_every", "train"),
+        sample_size=read_int(payload, "sample_size", "train"),
+        resume_from=read_optional_str(
+            payload,
+            "resume_from",
+            "train",
+            default=None,
+        ),
     )
 
 
@@ -231,10 +258,12 @@ def read_optional_str(
     key: str,
     section: str,
     *,
-    default: str,
-) -> str:
+    default: str | None,
+) -> str | None:
     if key not in payload:
         return default
+    if payload[key] is None:
+        return None
     return read_str(payload, key, section)
 
 
