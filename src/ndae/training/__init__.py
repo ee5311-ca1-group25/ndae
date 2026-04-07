@@ -1,3 +1,5 @@
-"""Training module placeholders for NDAE."""
+"""Public training API for NDAE."""
 
-__all__: list[str] = []
+from .solver import RolloutResult, SolverConfig
+
+__all__ = ["SolverConfig", "RolloutResult"]
