@@ -10,6 +10,7 @@ from ndae.losses import (
     slice_loss,
     sliced_wasserstein_loss,
 )
+from ndae.losses.objectives import init_loss, local_loss, overflow_loss
 
 
 def patch_vgg19(monkeypatch: pytest.MonkeyPatch) -> list[VGG19_Weights]:
@@ -250,3 +251,106 @@ def test_slice_loss_rejects_non_positive_weight_sum(monkeypatch: pytest.MonkeyPa
 
     with pytest.raises(ValueError, match="positive sum"):
         slice_loss(model, exemplar, sample, weights=[0.0] * 6)
+
+
+def test_overflow_loss_in_range_zero() -> None:
+    brdf_maps = torch.tensor([1e-6, 0.25, 1.0], dtype=torch.float32)
+
+    loss = overflow_loss(brdf_maps)
+
+    assert loss.shape == ()
+    assert loss.item() == pytest.approx(0.0)
+
+
+def test_overflow_loss_out_of_range_positive() -> None:
+    brdf_maps = torch.tensor([-0.25, 0.5, 1.2], dtype=torch.float32)
+
+    loss = overflow_loss(brdf_maps, eps=0.0)
+
+    assert loss.item() > 0.0
+
+
+def test_overflow_loss_proportional_to_excess() -> None:
+    small_excess = overflow_loss(torch.tensor([-0.25], dtype=torch.float32), eps=0.0)
+    large_excess = overflow_loss(torch.tensor([-0.5], dtype=torch.float32), eps=0.0)
+
+    assert torch.allclose(large_excess, small_excess * 4.0)
+
+
+def test_init_loss_same_input_zero() -> None:
+    image = torch.rand(2, 3, 16, 16)
+
+    loss = init_loss(image, image)
+
+    assert loss.shape == ()
+    assert loss.item() == pytest.approx(0.0)
+
+
+def test_init_loss_matches_manual_mse() -> None:
+    rendered = torch.tensor([0.0, 1.0, 3.0], dtype=torch.float32)
+    target = torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32)
+
+    loss = init_loss(rendered, target)
+
+    assert torch.allclose(loss, torch.tensor(5.0 / 3.0, dtype=torch.float32))
+
+
+def test_local_loss_sw_same_input_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    image = torch.rand(1, 3, 64, 64)
+
+    loss = local_loss(
+        model,
+        image,
+        image,
+        loss_type="SW",
+        generator=torch.Generator().manual_seed(11),
+    )
+
+    assert loss.shape == ()
+    assert loss.item() < 1e-6
+
+
+def test_local_loss_gram_same_input_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    image = torch.rand(1, 3, 64, 64)
+
+    loss = local_loss(model, image, image, loss_type="gram")
+
+    assert loss.shape == ()
+    assert loss.item() < 1e-6
+
+
+def test_local_loss_sw_and_gram_modes_positive(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    rendered = torch.ones(1, 3, 64, 64)
+    target = torch.zeros(1, 3, 64, 64)
+
+    sw_loss = local_loss(
+        model,
+        rendered,
+        target,
+        loss_type="SW",
+        generator=torch.Generator().manual_seed(17),
+    )
+    gram = local_loss(model, rendered, target, loss_type="gram")
+
+    assert sw_loss.item() > 0.0
+    assert gram.item() > 0.0
+
+
+def test_local_loss_rejects_unknown_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    patch_vgg19(monkeypatch)
+
+    model = perceptual.VGG19Features()
+    rendered = torch.rand(1, 3, 64, 64)
+    target = torch.rand(1, 3, 64, 64)
+
+    with pytest.raises(ValueError, match="Unknown loss_type"):
+        local_loss(model, rendered, target, loss_type="swd")
