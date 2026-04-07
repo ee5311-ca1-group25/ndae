@@ -88,6 +88,7 @@ def build_rendering_config(payload: Mapping[str, Any]) -> RenderingConfig:
         set(),
         optional={
             "renderer_type",
+            "n_brdf_channels",
             "n_normal_channels",
             "n_aug_channels",
             "camera_fov",
@@ -112,7 +113,12 @@ def build_rendering_config(payload: Mapping[str, Any]) -> RenderingConfig:
 
     return RenderingConfig(
         renderer_type=renderer_type,
-        n_brdf_channels=renderer_spec.n_brdf_channels,
+        n_brdf_channels=read_optional_int(
+            payload,
+            "n_brdf_channels",
+            "rendering",
+            default=renderer_spec.n_brdf_channels,
+        ),
         n_normal_channels=read_optional_int(
             payload,
             "n_normal_channels",

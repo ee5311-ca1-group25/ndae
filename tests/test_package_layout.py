@@ -140,9 +140,19 @@ def test_training_package_exports_public_api() -> None:
         StageConfig,
         Trainer,
         TrainerState,
+        load_resume_checkpoint,
+        load_sample_checkpoint,
+        resolve_checkpoint_dir,
+        save_checkpoint,
         rollout_generation,
         rollout_warmup,
         solve_rollout,
+    )
+    from ndae.training.checkpoint import (
+        load_resume_checkpoint as load_resume_checkpoint_impl,
+        load_sample_checkpoint as load_sample_checkpoint_impl,
+        resolve_checkpoint_dir as resolve_checkpoint_dir_impl,
+        save_checkpoint as save_checkpoint_impl,
     )
     from ndae.training.schedule import (
         RefreshSchedule as RefreshScheduleImpl,
@@ -169,6 +179,10 @@ def test_training_package_exports_public_api() -> None:
     assert StageConfig is StageConfigImpl
     assert RolloutWindow is RolloutWindowImpl
     assert RefreshSchedule is RefreshScheduleImpl
+    assert resolve_checkpoint_dir is resolve_checkpoint_dir_impl
+    assert save_checkpoint is save_checkpoint_impl
+    assert load_resume_checkpoint is load_resume_checkpoint_impl
+    assert load_sample_checkpoint is load_sample_checkpoint_impl
     assert Trainer is TrainerImpl
     assert TrainerState is TrainerStateImpl
 

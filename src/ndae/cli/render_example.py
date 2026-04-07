@@ -6,9 +6,9 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-import matplotlib.pyplot as plt
 import torch
 
+from ndae.utils import save_png_image
 from ndae.rendering import (
     Camera,
     FlashLight,
@@ -246,8 +246,7 @@ def build_coated_metal_preset(
 
 def save_image(path: Path, image: torch.Tensor) -> None:
     """Save a CHW tensor as an RGB PNG."""
-    rgb = image.detach().cpu().clamp(0.0, 1.0).permute(1, 2, 0).numpy()
-    plt.imsave(path, rgb)
+    save_png_image(path, image)
 
 
 __all__ = [

@@ -16,12 +16,9 @@ from ..models import TrajectoryModel
 from ..rendering import (
     Camera,
     FlashLight,
-    clip_maps,
-    height_to_normal,
-    render_svbrdf,
     split_latent_maps,
-    tonemapping,
 )
+from ..cli._svbrdf_system import render_latent_state
 from .schedule import RefreshSchedule, StageConfig
 from .solver import SolverConfig, rollout_generation, rollout_warmup
 
@@ -98,7 +95,8 @@ class Trainer:
         self.exemplar_frames = exemplar_frames.to(device=self.device, dtype=self.dtype)
         self.vgg_features = self.vgg_features.to(self.device, dtype=self.dtype)
         self.metrics_path = workspace / "metrics.jsonl"
-        self.metrics_path.write_text("", encoding="utf-8")
+        if not self.metrics_path.exists():
+            self.metrics_path.write_text("", encoding="utf-8")
         self.state = TrainerState(
             global_step=0,
             stage="init" if n_init_iter > 0 else "local",
@@ -182,13 +180,18 @@ class Trainer:
             "loss_overflow": float(loss_overflow.detach().item()),
         }
 
-    def run(self) -> None:
+    def run(
+        self,
+        checkpoint_callback: Callable[[Trainer], None] | None = None,
+    ) -> None:
         """Run the configured number of training steps."""
 
         for _ in range(self.n_iter):
             metrics = self.step()
             if self.state.global_step % self.log_every == 0:
                 self._log_metrics(metrics)
+            if checkpoint_callback is not None:
+                checkpoint_callback(self)
 
     def _current_stage(self) -> Literal["init", "local"]:
         return "init" if self.state.global_step < self.n_init_iter else "local"
@@ -236,21 +239,12 @@ class Trainer:
         self,
         state: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        brdf_maps, height_map = split_latent_maps(
+        brdf_maps, _ = split_latent_maps(
             state,
             n_brdf_channels=self.n_brdf_channels,
             n_normal_channels=self.n_normal_channels,
         )
-        normal_map = height_to_normal(height_map, scale=self.height_scale)
-        rendered = render_svbrdf(
-            clip_maps(brdf_maps),
-            normal_map,
-            self.camera,
-            self.flash_light,
-            self.renderer_pp,
-            self.unpack_fn,
-        )
-        return tonemapping(rendered, gamma=self.gamma), brdf_maps
+        return render_latent_state(self, state), brdf_maps
 
     def _log_metrics(self, metrics: dict[str, float | int | str]) -> None:
         line = json.dumps(metrics, sort_keys=True)

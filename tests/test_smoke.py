@@ -9,6 +9,7 @@ import torch.nn as nn
 import ndae.cli.train as train_cli
 from ndae.cli.render_example import run_render_example_cli
 from ndae.cli.train import run_train_cli
+from tests.support import write_image
 
 
 def test_dry_run_creates_workspace_and_resolved_config(tmp_path: Path, capsys) -> None:
@@ -85,11 +86,6 @@ def test_render_example_cli_writes_png(tmp_path: Path, capsys, preset: str) -> N
 class DummyFeatures(nn.Module):
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
         return [x]
-
-
-def write_image(path: Path, *, size: tuple[int, int], color: tuple[int, int, int]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    Image.new("RGB", size, color).save(path)
 
 
 def test_non_dry_run_cli_executes_trainer_and_writes_metrics(
@@ -169,3 +165,194 @@ train:
     assert "workspace:" in output
     assert str(workspace) in output
     assert "Training completed." in output
+
+
+def test_train_cli_writes_boundary_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(train_cli, "VGG19Features", DummyFeatures)
+
+    data_root = tmp_path / "data_root"
+    exemplar_dir = data_root / "example"
+    write_image(exemplar_dir / "frame_0000.png", size=(24, 24), color=(20, 40, 60))
+    write_image(exemplar_dir / "frame_0001.png", size=(24, 24), color=(60, 80, 100))
+
+    config_path = tmp_path / "checkpoint_train.yaml"
+    config_path.write_text(
+        f"""
+experiment:
+  name: checkpoint_smoke
+  output_root: {tmp_path}
+  seed: 7
+
+data:
+  root: {data_root}
+  exemplar: example
+  image_size: 16
+  crop_size: 8
+  n_frames: 2
+  t_I: -2.0
+  t_S: 0.0
+  t_E: 2.0
+
+model:
+  dim: 8
+  solver: euler
+
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position: [0.0, 0.0]
+  height_scale: 1.0
+  gamma: 2.2
+
+train:
+  batch_size: 1
+  lr: 0.001
+  dry_run: false
+  n_iter: 7
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 8
+  resume_from: null
+""".strip(),
+        encoding="utf-8",
+    )
+
+    exit_code = run_train_cli(["--config", str(config_path)])
+
+    assert exit_code == 0
+    workspace = tmp_path / "checkpoint_smoke"
+    latest = workspace / "checkpoints" / "latest"
+    assert (latest / "model.pt").is_file()
+    assert (latest / "optimizer.pt").is_file()
+    assert (latest / "trainer_state.pt").is_file()
+    assert (latest / "meta.json").is_file()
+
+
+def test_resume_cli_appends_metrics_jsonl(
+    tmp_path: Path,
+    capsys,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(train_cli, "VGG19Features", DummyFeatures)
+
+    data_root = tmp_path / "data_root"
+    exemplar_dir = data_root / "example"
+    write_image(exemplar_dir / "frame_0000.png", size=(24, 24), color=(20, 40, 60))
+    write_image(exemplar_dir / "frame_0001.png", size=(24, 24), color=(60, 80, 100))
+
+    first_config_path = tmp_path / "resume_first.yaml"
+    first_config_path.write_text(
+        f"""
+experiment:
+  name: resume_smoke
+  output_root: {tmp_path}
+  seed: 7
+
+data:
+  root: {data_root}
+  exemplar: example
+  image_size: 16
+  crop_size: 8
+  n_frames: 2
+  t_I: -2.0
+  t_S: 0.0
+  t_E: 2.0
+
+model:
+  dim: 8
+  solver: euler
+
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position: [0.0, 0.0]
+  height_scale: 1.0
+  gamma: 2.2
+
+train:
+  batch_size: 1
+  lr: 0.001
+  dry_run: false
+  n_iter: 7
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 8
+  resume_from: null
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert run_train_cli(["--config", str(first_config_path)]) == 0
+
+    workspace = tmp_path / "resume_smoke"
+    metrics_path = workspace / "metrics.jsonl"
+    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 7
+
+    second_config_path = tmp_path / "resume_second.yaml"
+    second_config_path.write_text(
+        f"""
+experiment:
+  name: resume_smoke
+  output_root: {tmp_path}
+  seed: 7
+
+data:
+  root: {data_root}
+  exemplar: example
+  image_size: 16
+  crop_size: 8
+  n_frames: 2
+  t_I: -2.0
+  t_S: 0.0
+  t_E: 2.0
+
+model:
+  dim: 8
+  solver: euler
+
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position: [0.0, 0.0]
+  height_scale: 1.0
+  gamma: 2.2
+
+train:
+  batch_size: 1
+  lr: 0.001
+  dry_run: false
+  n_iter: 1
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 1
+  sample_every: 1
+  sample_size: 8
+  resume_from: {workspace / "checkpoints" / "latest"}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert run_train_cli(["--config", str(second_config_path)]) == 0
+    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 8
+
+    output = capsys.readouterr().out
+    assert "Resumed from checkpoint:" in output

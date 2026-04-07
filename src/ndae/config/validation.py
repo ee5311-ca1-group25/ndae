@@ -15,7 +15,12 @@ from .schema import NDAEConfig
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 
-def validate_config(config: NDAEConfig, *, base_dir: str | Path | None = None) -> None:
+def validate_config(
+    config: NDAEConfig,
+    *,
+    base_dir: str | Path | None = None,
+    validate_dataset: bool = True,
+) -> None:
     """Validate structural and semantic constraints for an NDAE config."""
     ensure_non_empty_string(config.experiment.name, "experiment.name")
     ensure_non_empty_string(config.experiment.output_root, "experiment.output_root")
@@ -33,7 +38,8 @@ def validate_config(config: NDAEConfig, *, base_dir: str | Path | None = None) -
         raise ConfigError("data timeline must satisfy t_I < t_S < t_E")
     if config.data.crop_size > config.data.image_size:
         raise ConfigError("data.crop_size must be less than or equal to data.image_size")
-    validate_dataset_layout(config, base_dir=base_dir)
+    if validate_dataset:
+        validate_dataset_layout(config, base_dir=base_dir)
 
     ensure_positive_int(config.model.dim, "model.dim")
     ensure_non_empty_string(config.model.solver, "model.solver")

@@ -8,6 +8,12 @@ from .solver import (
     rollout_warmup,
     solve_rollout,
 )
+from .checkpoint import (
+    load_resume_checkpoint,
+    load_sample_checkpoint,
+    resolve_checkpoint_dir,
+    save_checkpoint,
+)
 from .trainer import Trainer, TrainerState
 
 __all__ = [
@@ -19,6 +25,10 @@ __all__ = [
     "StageConfig",
     "RolloutWindow",
     "RefreshSchedule",
+    "resolve_checkpoint_dir",
+    "save_checkpoint",
+    "load_resume_checkpoint",
+    "load_sample_checkpoint",
     "Trainer",
     "TrainerState",
 ]
