@@ -109,6 +109,24 @@ def test_base_config_loads_into_dataclasses() -> None:
     assert config.train.resume_from is None
 
 
+def test_debug_config_loads_without_dataset_validation() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    config = load_config(
+        project_root / "configs" / "debug.yaml",
+        validate_dataset=False,
+    )
+
+    assert config.experiment.name == "lecture09_debug_clay"
+    assert config.data.root == "data_local/svbrdf_full"
+    assert config.data.exemplar == "clay_solidifying"
+    assert config.data.n_frames == 16
+    assert config.train.dry_run is False
+    assert config.train.n_iter == 7
+    assert config.train.n_init_iter == 2
+    assert config.train.checkpoint_every == 1
+    assert config.train.sample_size == 64
+
+
 def test_to_dict_returns_plain_dictionary_tree() -> None:
     config = NDAEConfig(
         experiment=ExperimentConfig(name="demo", output_root="outputs", seed=7),

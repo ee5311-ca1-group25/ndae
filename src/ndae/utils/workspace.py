@@ -1,4 +1,4 @@
-"""Workspace helpers for Lecture 1 dry-run execution."""
+"""Workspace helpers for NDAE train and debug runs."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def format_run_summary(config: NDAEConfig, workspace: Path) -> str:
     """Return a concise run summary for the current config."""
     return "\n".join(
         [
-            "NDAE Lecture 1 Dry Run",
+            "NDAE Train Run Summary",
             f"experiment.name: {config.experiment.name}",
             f"experiment.seed: {config.experiment.seed}",
             f"data.root: {config.data.root}",

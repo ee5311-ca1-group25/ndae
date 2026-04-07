@@ -364,7 +364,7 @@ def test_train_cli_stub_returns_success(capsys: pytest.CaptureFixture[str]) -> N
 
     assert run_train_cli(["--config", "configs/base.yaml", "--dry-run"]) == 0
     output = capsys.readouterr().out
-    assert "NDAE Lecture 1 Dry Run" in output
+    assert "NDAE Train Run Summary" in output
     assert "rendering.renderer_type: diffuse_cook_torrance" in output
     assert "Dry run completed." in output
 
@@ -380,5 +380,5 @@ def test_main_entrypoint_smoke() -> None:
     )
 
     assert result.returncode == 0
-    assert "NDAE Lecture 1 Dry Run" in result.stdout
+    assert "NDAE Train Run Summary" in result.stdout
     assert "Dry run completed." in result.stdout
