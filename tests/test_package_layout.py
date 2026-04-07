@@ -85,6 +85,46 @@ def test_losses_package_exports_public_api() -> None:
     assert local_loss is local_loss_impl
 
 
+def test_models_package_exports_public_api() -> None:
+    from ndae.models import (
+        ConvBlock,
+        DefaultConv2d,
+        LinearTimeSelfAttention,
+        NDAEUNet,
+        Residual,
+        Resample,
+        SinusoidalTimeEmbedding,
+        SpatialLinear,
+        TimeMLP,
+        zero_init,
+    )
+    from ndae.models.blocks import (
+        ConvBlock as ConvBlockImpl,
+        DefaultConv2d as DefaultConv2dImpl,
+        LinearTimeSelfAttention as LinearTimeSelfAttentionImpl,
+        Residual as ResidualImpl,
+        Resample as ResampleImpl,
+        SpatialLinear as SpatialLinearImpl,
+        zero_init as zero_init_impl,
+    )
+    from ndae.models.time_embedding import (
+        SinusoidalTimeEmbedding as SinusoidalTimeEmbeddingImpl,
+        TimeMLP as TimeMLPImpl,
+    )
+    from ndae.models.unet import NDAEUNet as NDAEUNetImpl
+
+    assert NDAEUNet is NDAEUNetImpl
+    assert SinusoidalTimeEmbedding is SinusoidalTimeEmbeddingImpl
+    assert TimeMLP is TimeMLPImpl
+    assert ConvBlock is ConvBlockImpl
+    assert DefaultConv2d is DefaultConv2dImpl
+    assert SpatialLinear is SpatialLinearImpl
+    assert Resample is ResampleImpl
+    assert LinearTimeSelfAttention is LinearTimeSelfAttentionImpl
+    assert Residual is ResidualImpl
+    assert zero_init is zero_init_impl
+
+
 def test_rendering_package_exports_renderer_metadata() -> None:
     from ndae.rendering import (
         EPSILON,

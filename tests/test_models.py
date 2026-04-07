@@ -309,3 +309,29 @@ def test_unet_rejects_dim_mults_without_leading_one() -> None:
 def test_unet_rejects_empty_dim_mults() -> None:
     with pytest.raises(ValueError, match="dim_mults to be non-empty"):
         NDAEUNet(dim_mults=())
+
+
+def test_parameter_summary(capsys: pytest.CaptureFixture[str]) -> None:
+    from ndae.models import NDAEUNet as PublicNDAEUNet
+
+    model = PublicNDAEUNet(in_dim=9, out_dim=9, dim=32, dim_mults=(1, 2))
+    total = sum(parameter.numel() for parameter in model.parameters())
+    subtotal = 0
+
+    for name, module in model.named_children():
+        params = sum(parameter.numel() for parameter in module.parameters())
+        subtotal += params
+        print(f"{name}: {params:,}")
+    print(f"Total: {total:,}")
+
+    output = capsys.readouterr().out
+    assert "init_conv:" in output
+    assert "time_mlp:" in output
+    assert "downs:" in output
+    assert "mid_block:" in output
+    assert "mid_attn:" in output
+    assert "ups:" in output
+    assert "final_conv:" in output
+    assert "Total:" in output
+    assert total > 0
+    assert subtotal == total
