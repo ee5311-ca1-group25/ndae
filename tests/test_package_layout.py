@@ -131,6 +131,34 @@ def test_models_package_exports_public_api() -> None:
     assert zero_init is zero_init_impl
 
 
+def test_training_package_exports_public_api() -> None:
+    from ndae.training import (
+        RefreshSchedule,
+        RolloutResult,
+        RolloutWindow,
+        SolverConfig,
+        StageConfig,
+        solve_rollout,
+    )
+    from ndae.training.schedule import (
+        RefreshSchedule as RefreshScheduleImpl,
+        RolloutWindow as RolloutWindowImpl,
+        StageConfig as StageConfigImpl,
+    )
+    from ndae.training.solver import (
+        RolloutResult as RolloutResultImpl,
+        SolverConfig as SolverConfigImpl,
+        solve_rollout as solve_rollout_impl,
+    )
+
+    assert SolverConfig is SolverConfigImpl
+    assert RolloutResult is RolloutResultImpl
+    assert solve_rollout is solve_rollout_impl
+    assert StageConfig is StageConfigImpl
+    assert RolloutWindow is RolloutWindowImpl
+    assert RefreshSchedule is RefreshScheduleImpl
+
+
 def test_rendering_package_exports_renderer_metadata() -> None:
     from ndae.rendering import (
         EPSILON,
