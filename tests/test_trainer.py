@@ -5,12 +5,15 @@ import pytest
 import torch
 import torch.nn as nn
 
+import ndae.evaluation.runtime as evaluation_runtime_module
+import ndae.training.target_sampling as target_sampling_module
 from ndae.config import RenderingConfig
 from ndae.data import Timeline
 from ndae.models import NDAEUNet, ODEFunction, TrajectoryModel
 from ndae.rendering import (
     Camera,
     FlashLight,
+    create_meshgrid,
     diffuse_cook_torrance,
     select_renderer,
     unpack_brdf_diffuse_cook_torrance,
@@ -25,6 +28,10 @@ from ndae.training import (
     Trainer,
     TrainerComponents,
     TrainerConfig,
+    TrainerLossConfig,
+    TrainerRuntimeConfig,
+    TrainerSchedulerConfig,
+    TrainerStageConfig,
 )
 
 
@@ -44,6 +51,10 @@ def make_trainer(
     n_loss_crops: int = 2,
     overflow_weight: float = 100.0,
     init_height_weight: float = 1.0,
+    eval_every: int = 500,
+    scheduler_factor: float = 0.5,
+    scheduler_patience_evals: int = 5,
+    scheduler_min_lr: float = 1e-4,
 ) -> Trainer:
     renderer_spec = select_renderer("diffuse_cook_torrance")
     rendering = RenderingConfig(
@@ -116,17 +127,31 @@ def make_trainer(
             exemplar_frames=exemplar_frames,
             timeline=timeline,
             crop_size=8,
-            batch_size=batch_size,
-            workspace=tmp_path,
-            n_iter=n_iter,
-            n_init_iter=n_init_iter,
-            log_every=log_every,
-            loss_type=loss_type,
-            n_loss_crops=n_loss_crops,
-            overflow_weight=overflow_weight,
-            init_height_weight=init_height_weight,
-            gamma=rendering.gamma,
-            generator=generator,
+            runtime=TrainerRuntimeConfig(
+                batch_size=batch_size,
+                workspace=tmp_path,
+                n_iter=n_iter,
+                log_every=log_every,
+                gamma=rendering.gamma,
+                generator=generator,
+            ),
+            stage=TrainerStageConfig(
+                n_init_iter=n_init_iter,
+                refresh_rate_init=2,
+                refresh_rate_local=3,
+            ),
+            loss=TrainerLossConfig(
+                loss_type=loss_type,
+                n_loss_crops=n_loss_crops,
+                overflow_weight=overflow_weight,
+                init_height_weight=init_height_weight,
+            ),
+            scheduler=TrainerSchedulerConfig(
+                eval_every=eval_every,
+                scheduler_factor=scheduler_factor,
+                scheduler_patience_evals=scheduler_patience_evals,
+                scheduler_min_lr=scheduler_min_lr,
+            ),
         ),
     )
 
@@ -195,12 +220,17 @@ def test_trainer_run_writes_metrics_jsonl(tmp_path: Path) -> None:
     metrics_path = tmp_path / "metrics.jsonl"
     lines = metrics_path.read_text(encoding="utf-8").strip().splitlines()
     payloads = [json.loads(line) for line in lines]
+    step_payloads = [payload for payload in payloads if payload.get("event") != "eval"]
+    eval_payloads = [payload for payload in payloads if payload.get("event") == "eval"]
 
     assert metrics_path.is_file()
-    assert len(payloads) == 3
-    assert [payload["global_step"] for payload in payloads] == [1, 2, 3]
-    assert payloads[0]["stage"] == "init"
-    assert payloads[1]["stage"] == "local"
+    assert len(step_payloads) == 3
+    assert [payload["global_step"] for payload in step_payloads] == [1, 2, 3]
+    assert step_payloads[0]["stage"] == "init"
+    assert step_payloads[1]["stage"] == "local"
+    assert len(eval_payloads) == 2
+    assert eval_payloads[0]["eval_scope"] == "init"
+    assert eval_payloads[1]["eval_scope"] == "local"
     assert {
         "global_step",
         "stage",
@@ -213,7 +243,7 @@ def test_trainer_run_writes_metrics_jsonl(tmp_path: Path) -> None:
         "loss_init",
         "loss_local",
         "loss_overflow",
-    } <= payloads[0].keys()
+    } <= step_payloads[0].keys()
 
 
 def test_trainer_init_stage_uses_random_take_specs(
@@ -223,20 +253,20 @@ def test_trainer_init_stage_uses_random_take_specs(
     trainer = make_trainer(tmp_path, n_init_iter=1, n_loss_crops=3)
     calls = {"take": 0, "crop": 0}
 
-    def fake_take_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+    def fake_take_spec(*args: object, **kwargs: object) -> target_sampling_module.CropSampleSpec:
         del args, kwargs
         calls["take"] += 1
-        return trainer_module.CropSampleSpec(
+        return target_sampling_module.CropSampleSpec(
             kind="take",
             height=trainer.crop_size,
             width=trainer.crop_size,
             indices=torch.arange(trainer.crop_size * trainer.crop_size),
         )
 
-    def fake_crop_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+    def fake_crop_spec(*args: object, **kwargs: object) -> target_sampling_module.CropSampleSpec:
         del args, kwargs
         calls["crop"] += 1
-        return trainer_module.CropSampleSpec(
+        return target_sampling_module.CropSampleSpec(
             kind="rect",
             height=trainer.crop_size,
             width=trainer.crop_size,
@@ -244,8 +274,8 @@ def test_trainer_init_stage_uses_random_take_specs(
             left=0,
         )
 
-    monkeypatch.setattr(trainer_module, "sample_random_take_spec", fake_take_spec)
-    monkeypatch.setattr(trainer_module, "sample_random_crop_spec", fake_crop_spec)
+    monkeypatch.setattr(target_sampling_module, "sample_random_take_spec", fake_take_spec)
+    monkeypatch.setattr(target_sampling_module, "sample_random_crop_spec", fake_crop_spec)
 
     trainer.step()
 
@@ -260,20 +290,20 @@ def test_trainer_local_stage_uses_random_crop_specs(
     trainer = make_trainer(tmp_path, n_init_iter=0, n_loss_crops=4)
     calls = {"take": 0, "crop": 0}
 
-    def fake_take_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+    def fake_take_spec(*args: object, **kwargs: object) -> target_sampling_module.CropSampleSpec:
         del args, kwargs
         calls["take"] += 1
-        return trainer_module.CropSampleSpec(
+        return target_sampling_module.CropSampleSpec(
             kind="take",
             height=trainer.crop_size,
             width=trainer.crop_size,
             indices=torch.arange(trainer.crop_size * trainer.crop_size),
         )
 
-    def fake_crop_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+    def fake_crop_spec(*args: object, **kwargs: object) -> target_sampling_module.CropSampleSpec:
         del args, kwargs
         calls["crop"] += 1
-        return trainer_module.CropSampleSpec(
+        return target_sampling_module.CropSampleSpec(
             kind="rect",
             height=trainer.crop_size,
             width=trainer.crop_size,
@@ -281,8 +311,8 @@ def test_trainer_local_stage_uses_random_crop_specs(
             left=0,
         )
 
-    monkeypatch.setattr(trainer_module, "sample_random_take_spec", fake_take_spec)
-    monkeypatch.setattr(trainer_module, "sample_random_crop_spec", fake_crop_spec)
+    monkeypatch.setattr(target_sampling_module, "sample_random_take_spec", fake_take_spec)
+    monkeypatch.setattr(target_sampling_module, "sample_random_crop_spec", fake_crop_spec)
 
     trainer.step()
 
@@ -304,6 +334,66 @@ def test_trainer_multicrop_uses_all_samples(tmp_path: Path) -> None:
 
     assert sampled["target"].shape == (6, 3, 8, 8)
     assert sampled["rendered"].shape == (6, 3, 8, 8)
+
+
+def test_render_sample_uses_exemplar_image_size_for_positions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=0)
+    spec = target_sampling_module.CropSampleSpec(
+        kind="rect",
+        height=trainer.crop_size,
+        width=trainer.crop_size,
+        top=4,
+        left=5,
+        top_ratio=0.5,
+        left_ratio=0.625,
+    )
+    brdf_maps = torch.full(
+        (trainer.system.n_brdf_channels, trainer.crop_size, trainer.crop_size),
+        0.5,
+        dtype=trainer.dtype,
+        device=trainer.device,
+    )
+    normal_map = torch.zeros(
+        3,
+        trainer.crop_size,
+        trainer.crop_size,
+        dtype=trainer.dtype,
+        device=trainer.device,
+    )
+    captured: dict[str, torch.Tensor] = {}
+
+    def fake_render_svbrdf(*args: object, **kwargs: object) -> torch.Tensor:
+        del args
+        captured["positions"] = kwargs["positions"]
+        return torch.zeros(
+            3,
+            trainer.crop_size,
+            trainer.crop_size,
+            dtype=trainer.dtype,
+            device=trainer.device,
+        )
+
+    monkeypatch.setattr(target_sampling_module, "render_svbrdf", fake_render_svbrdf)
+
+    target_sampling_module.render_sample(
+        trainer,
+        brdf_maps,
+        normal_map,
+        spec,
+        image_height=trainer.exemplar_frames.shape[-2],
+        image_width=trainer.exemplar_frames.shape[-1],
+    )
+
+    expected = create_meshgrid(
+        trainer.exemplar_frames.shape[-2],
+        trainer.exemplar_frames.shape[-1],
+        trainer.system.camera,
+        device=trainer.device,
+    )[:, 4 : 4 + trainer.crop_size, 5 : 5 + trainer.crop_size].to(dtype=trainer.dtype)
+    assert torch.allclose(captured["positions"], expected)
 
 
 def test_trainer_init_loss_includes_height_and_weighted_overflow(
@@ -383,3 +473,110 @@ def test_trainer_local_stage_supports_gram_loss(tmp_path: Path) -> None:
 
     assert metrics["stage"] == "local"
     assert metrics["loss_local"] >= 0.0
+
+
+def test_normalize_gradients_scales_nonzero_grads_and_keeps_zero_grads_finite(tmp_path: Path) -> None:
+    trainer = make_trainer(tmp_path)
+    first_param = next(trainer.trajectory_model.parameters())
+    first_param.grad = torch.full_like(first_param, 3.0)
+    intensity = trainer.system.flash_light.intensity
+    intensity.grad = torch.zeros_like(intensity)
+
+    trainer._normalize_gradients()
+
+    assert first_param.grad is not None
+    assert first_param.grad.norm().item() == pytest.approx(1.0, rel=1e-5)
+    assert intensity.grad is not None
+    assert torch.all(torch.isfinite(intensity.grad))
+    assert intensity.grad.item() == pytest.approx(0.0)
+
+
+def test_run_triggers_eval_at_iteration_zero_watershed_and_period(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = make_trainer(tmp_path, n_iter=4, n_init_iter=2, eval_every=2)
+    seen: list[int] = []
+
+    def fake_eval(current_trainer: Trainer, *, iteration: int) -> dict[str, float | int | str]:
+        assert current_trainer is trainer
+        seen.append(iteration)
+        return {
+            "global_step": trainer.state.global_step,
+            "stage": trainer.state.stage,
+            "event": "eval",
+            "eval_iteration": iteration,
+            "eval_scope": trainer.state.stage,
+            "effective_lr": trainer.optimizer.param_groups[0]["lr"],
+        }
+
+    monkeypatch.setattr(trainer_module, "run_eval", fake_eval)
+
+    trainer.run()
+
+    assert seen == [0, 1, 2, 3]
+
+
+def test_init_eval_does_not_step_scheduler(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=2)
+    calls: list[float] = []
+
+    def fake_step(value: float) -> None:
+        calls.append(value)
+
+    monkeypatch.setattr(trainer.scheduler, "step", fake_step)
+
+    metrics = evaluation_runtime_module.run_eval(trainer, iteration=0)
+
+    assert metrics["eval_scope"] == "init"
+    assert calls == []
+
+
+def test_local_eval_steps_scheduler_and_reports_inference_loss(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=0)
+    calls: list[float] = []
+
+    def fake_inference_loss(_trainer: Trainer) -> float:
+        return 0.25
+
+    def fake_step(value: float) -> None:
+        calls.append(value)
+
+    monkeypatch.setattr(evaluation_runtime_module, "compute_inference_loss", fake_inference_loss)
+    monkeypatch.setattr(trainer.scheduler, "step", fake_step)
+
+    metrics = evaluation_runtime_module.run_eval(trainer, iteration=0)
+
+    assert metrics["eval_scope"] == "local"
+    assert metrics["inference_loss"] == pytest.approx(0.25)
+    assert calls == [0.25]
+
+
+def test_enter_local_stage_resets_scheduler(tmp_path: Path) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=1)
+    before = trainer.scheduler
+
+    trainer.step()
+    trainer.step()
+
+    assert trainer.state.stage == "local"
+    assert trainer.scheduler is not before
+
+
+def test_run_invokes_eval_callback_only_on_eval_steps(tmp_path: Path) -> None:
+    trainer = make_trainer(tmp_path, n_iter=4, n_init_iter=2, eval_every=2)
+    calls: list[int] = []
+
+    def on_eval(current_trainer: Trainer, metrics: dict[str, float | int | str]) -> None:
+        assert current_trainer is trainer
+        calls.append(int(metrics["eval_iteration"]))
+
+    trainer.run(eval_callback=on_eval)
+
+    assert calls == [0, 1, 2, 3]

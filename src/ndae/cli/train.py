@@ -5,16 +5,11 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Sequence
 
 from ndae.config import NDAEConfig, load_config
 from ndae.losses import VGG19Features
-from ndae.training import (
-    Trainer,
-    build_trainer,
-    load_resume_checkpoint,
-    save_checkpoint,
-)
+from ndae.training import build_trainer, load_resume_checkpoint, save_checkpoint
 from ndae.utils import create_workspace, format_run_summary, save_resolved_config
 
 
@@ -69,13 +64,7 @@ def run_train_cli(argv: Sequence[str] | None = None) -> int:
     if config.train.runtime.resume_from is not None:
         load_resume_checkpoint(Path(config.train.runtime.resume_from), trainer)
         print(f"Resumed from checkpoint: {Path(config.train.runtime.resume_from).resolve()}")
-    trainer.run(
-        make_checkpoint_callback(
-            config,
-            workspace,
-            initial_checkpoint_step=trainer.state.global_step,
-        )
-    )
+    trainer.run(eval_callback=make_eval_checkpoint_callback(workspace))
     print("Training completed.")
     return 0
 
@@ -104,24 +93,9 @@ def apply_overrides(
     return replace(config, experiment=experiment, train=train)
 
 
-def make_checkpoint_callback(
-    config: NDAEConfig,
-    workspace: Path,
-    *,
-    initial_checkpoint_step: int = 0,
-) -> Callable[[Trainer], None]:
-    last_checkpoint_step = initial_checkpoint_step
-
-    def callback(trainer: Trainer) -> None:
-        if trainer.state.cycle_step != 0:
-            return
-        nonlocal last_checkpoint_step
-        if (
-            trainer.state.global_step - last_checkpoint_step
-            < config.train.runtime.checkpoint_every
-        ):
-            return
-        save_checkpoint(workspace, trainer)
-        last_checkpoint_step = trainer.state.global_step
+def make_eval_checkpoint_callback(workspace: Path):
+    def callback(trainer, eval_metrics: dict[str, float | int | str]) -> None:
+        del eval_metrics
+        save_checkpoint(workspace, trainer, saved_during_eval=True)
 
     return callback

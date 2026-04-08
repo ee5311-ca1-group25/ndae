@@ -60,6 +60,7 @@ def render_svbrdf(
     renderer_pp: Callable,
     unpack_fn: Callable,
     *,
+    positions: torch.Tensor | None = None,
     full_height: int | None = None,
     full_width: int | None = None,
     region: tuple[int, int, int, int] | None = None,
@@ -83,7 +84,12 @@ def render_svbrdf(
     device = brdf_batch.device
     dtype = brdf_batch.dtype
 
-    if region is None:
+    if positions is not None:
+        if region is not None or full_height is not None or full_width is not None:
+            raise ValueError("positions cannot be combined with region or full image size")
+        if positions.ndim != 3 or positions.shape != (3, h, w):
+            raise ValueError("positions must be shaped [3, H, W] and match the input map size")
+    elif region is None:
         positions = create_meshgrid(h, w, camera, device=device)
     else:
         if full_height is None or full_width is None:
@@ -99,7 +105,7 @@ def render_svbrdf(
             :, top : top + crop_h, left : left + crop_w
         ]
 
-    positions = positions.to(dtype=dtype)
+    positions = positions.to(device=device, dtype=dtype)
     wi, wo = compute_directions(positions, camera, flash_light)
     wi = wi.unsqueeze(0).expand(batch_size, -1, -1, -1)
     wo = wo.unsqueeze(0).expand(batch_size, -1, -1, -1)

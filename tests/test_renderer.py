@@ -250,6 +250,43 @@ def test_render_svbrdf_crop_matches_full() -> None:
     assert torch.allclose(crop, full[:, top : top + crop_h, left : left + crop_w], atol=1e-6)
 
 
+def test_render_svbrdf_explicit_positions_match_region_crop() -> None:
+    brdf_maps = torch.zeros(8, 7, 8, dtype=torch.float32)
+    brdf_maps[:3] = 0.8
+    brdf_maps[3:6] = 0.2
+    brdf_maps[6:8] = 0.3
+    normal_map = height_to_normal(torch.zeros(1, 7, 8, dtype=torch.float32))
+    camera = Camera()
+    light = FlashLight(intensity=0.1, xy_position=(0.1, -0.2))
+    top, left, crop_h, crop_w = 2, 3, 3, 4
+    crop_brdf = brdf_maps[:, top : top + crop_h, left : left + crop_w]
+    crop_normal = normal_map[:, top : top + crop_h, left : left + crop_w]
+
+    with_region = render_svbrdf(
+        crop_brdf,
+        crop_normal,
+        camera,
+        light,
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+        full_height=7,
+        full_width=8,
+        region=(top, left, crop_h, crop_w),
+    )
+    positions = create_meshgrid(7, 8, camera)[:, top : top + crop_h, left : left + crop_w]
+    with_positions = render_svbrdf(
+        crop_brdf,
+        crop_normal,
+        camera,
+        light,
+        diffuse_cook_torrance,
+        unpack_brdf_diffuse_cook_torrance,
+        positions=positions,
+    )
+
+    assert torch.allclose(with_positions, with_region, atol=1e-6)
+
+
 def test_render_svbrdf_backward_smoke() -> None:
     z = torch.randn(18, 8, 8, dtype=torch.float32, requires_grad=True)
     brdf_maps, height_map = split_latent_maps(z, n_brdf_channels=8, n_normal_channels=1)

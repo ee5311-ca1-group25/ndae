@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
 from .schedule import RefreshSchedule
-from .trainer import Trainer, TrainerState
+from .state import TrainerState
+
+if TYPE_CHECKING:
+    from .trainer import Trainer
 
 
 def resolve_checkpoint_dir(path: str | Path) -> Path:
@@ -32,7 +36,12 @@ def resolve_checkpoint_dir(path: str | Path) -> Path:
     return checkpoint_dir
 
 
-def save_checkpoint(workspace: Path, trainer: Trainer) -> Path:
+def save_checkpoint(
+    workspace: Path,
+    trainer: Trainer,
+    *,
+    saved_during_eval: bool,
+) -> Path:
     """Persist model, optimizer, trainer state, and metadata."""
     checkpoint_root = workspace / "checkpoints"
     checkpoint_root.mkdir(parents=True, exist_ok=True)
@@ -43,12 +52,14 @@ def save_checkpoint(workspace: Path, trainer: Trainer) -> Path:
 
     model_path = checkpoint_dir / "model.pt"
     optimizer_path = checkpoint_dir / "optimizer.pt"
+    scheduler_path = checkpoint_dir / "scheduler.pt"
     trainer_state_path = checkpoint_dir / "trainer_state.pt"
     flashlight_path = checkpoint_dir / "flashlight.pt"
     meta_path = checkpoint_dir / "meta.json"
 
     torch.save(trainer.trajectory_model.state_dict(), model_path)
     torch.save(trainer.optimizer.state_dict(), optimizer_path)
+    torch.save(trainer.scheduler.state_dict(), scheduler_path)
     torch.save(_trainer_state_payload(trainer.state), trainer_state_path)
     torch.save(_flashlight_payload(trainer.system.flash_light), flashlight_path)
 
@@ -59,11 +70,14 @@ def save_checkpoint(workspace: Path, trainer: Trainer) -> Path:
         "resume_ready": resume_ready,
         "cycle_step": trainer.state.cycle_step,
         "saved_at_refresh_boundary": resume_ready,
+        "saved_during_eval": saved_during_eval,
+        "effective_lr": float(trainer.optimizer.param_groups[0]["lr"]),
         "files": [
             "flashlight.pt",
             "meta.json",
             "model.pt",
             "optimizer.pt",
+            "scheduler.pt",
             "trainer_state.pt",
         ],
     }
@@ -106,6 +120,9 @@ def load_resume_checkpoint(checkpoint_dir: Path, trainer: Trainer) -> TrainerSta
     )
     trainer.optimizer.load_state_dict(
         torch.load(resolved_dir / "optimizer.pt", map_location=trainer.device)
+    )
+    trainer.scheduler.load_state_dict(
+        torch.load(resolved_dir / "scheduler.pt", map_location=trainer.device)
     )
     trainer.state = trainer_state
     stage_config = trainer.init_stage_config if trainer.state.stage == "init" else trainer.local_stage_config

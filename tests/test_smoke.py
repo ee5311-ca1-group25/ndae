@@ -41,6 +41,9 @@ def test_dry_run_creates_workspace_and_resolved_config(tmp_path: Path, capsys) -
     assert "data.exemplar: clay_solidifying" in output
     assert "rendering.renderer_type: diffuse_cook_torrance" in output
     assert "rendering.total_channels: 18" in output
+    assert "train.stage.refresh_rate_init: 2" in output
+    assert "train.scheduler.eval_every: 500" in output
+    assert "checkpoint cadence: eval-driven" in output
     assert "Dry run completed." in output
 
     resolved_text = resolved_config.read_text(encoding="utf-8")
@@ -145,7 +148,8 @@ train:
   stage:
     n_init_iter: 1
   loss: {{}}
-  scheduler: {{}}
+  scheduler:
+    eval_every: 1
 """.strip(),
         encoding="utf-8",
     )
@@ -161,7 +165,7 @@ train:
     assert workspace.is_dir()
     assert resolved_config.is_file()
     assert metrics_path.is_file()
-    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 2
+    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 4
 
     output = capsys.readouterr().out
     assert "workspace:" in output
@@ -224,7 +228,8 @@ train:
   stage:
     n_init_iter: 1
   loss: {{}}
-  scheduler: {{}}
+  scheduler:
+    eval_every: 1
 """.strip(),
         encoding="utf-8",
     )
@@ -296,7 +301,8 @@ train:
   stage:
     n_init_iter: 1
   loss: {{}}
-  scheduler: {{}}
+  scheduler:
+    eval_every: 1
 """.strip(),
         encoding="utf-8",
     )
@@ -312,6 +318,7 @@ train:
     meta_text = (latest / "meta.json").read_text(encoding="utf-8")
     assert '"step": 7' in meta_text
     assert '"stage": "local"' in meta_text
+    assert '"saved_during_eval": true' in meta_text
 
 
 def test_train_checkpoint_sample_closes_loop_on_toy_setup(
@@ -371,7 +378,8 @@ train:
   stage:
     n_init_iter: 1
   loss: {{}}
-  scheduler: {{}}
+  scheduler:
+    eval_every: 1
 """.strip(),
         encoding="utf-8",
     )
@@ -402,7 +410,8 @@ train:
     sample_output = capsys.readouterr().out
     assert "Sample generation completed." in sample_output
     assert str(latest.resolve()) in sample_output
-    assert "frames: 3" in sample_output
+    assert "transition_frames: 3" in sample_output
+    assert "synthesis_frames: 50" in sample_output
     assert "sample_size: 10" in sample_output
 
 
@@ -462,7 +471,8 @@ train:
   stage:
     n_init_iter: 1
   loss: {{}}
-  scheduler: {{}}
+  scheduler:
+    eval_every: 1
 """.strip(),
         encoding="utf-8",
     )
@@ -471,7 +481,7 @@ train:
 
     workspace = tmp_path / "resume_smoke"
     metrics_path = workspace / "metrics.jsonl"
-    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 7
+    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 14
 
     second_config_path = tmp_path / "resume_second.yaml"
     second_config_path.write_text(
@@ -517,13 +527,14 @@ train:
   stage:
     n_init_iter: 1
   loss: {{}}
-  scheduler: {{}}
+  scheduler:
+    eval_every: 1
 """.strip(),
         encoding="utf-8",
     )
 
     assert run_train_cli(["--config", str(second_config_path)]) == 0
-    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 8
+    assert len(metrics_path.read_text(encoding="utf-8").strip().splitlines()) == 16
 
     output = capsys.readouterr().out
     assert "Resumed from checkpoint:" in output

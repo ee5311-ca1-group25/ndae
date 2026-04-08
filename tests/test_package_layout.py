@@ -178,11 +178,13 @@ def test_training_package_exports_public_api() -> None:
         render_latent_state as render_latent_state_impl,
     )
     from ndae.training.factory import build_trainer as build_trainer_impl
+    from ndae.training.config import (
+        TrainerConfig as TrainerConfigImpl,
+    )
+    from ndae.training.state import TrainerState as TrainerStateImpl
     from ndae.training.trainer import (
         Trainer as TrainerImpl,
         TrainerComponents as TrainerComponentsImpl,
-        TrainerConfig as TrainerConfigImpl,
-        TrainerState as TrainerStateImpl,
     )
 
     assert SVBRDFSystem is SVBRDFSystemImpl
@@ -205,6 +207,34 @@ def test_training_package_exports_public_api() -> None:
     assert TrainerComponents is TrainerComponentsImpl
     assert TrainerConfig is TrainerConfigImpl
     assert TrainerState is TrainerStateImpl
+
+
+def test_evaluation_package_exports_public_api() -> None:
+    from ndae.evaluation import (
+        build_sample_timeline,
+        compute_inference_loss,
+        effective_lr,
+        run_eval,
+        sample_sequence,
+        should_eval,
+    )
+    from ndae.evaluation.runtime import (
+        compute_inference_loss as compute_inference_loss_impl,
+        effective_lr as effective_lr_impl,
+        run_eval as run_eval_impl,
+        should_eval as should_eval_impl,
+    )
+    from ndae.evaluation.sampling import (
+        build_sample_timeline as build_sample_timeline_impl,
+        sample_sequence as sample_sequence_impl,
+    )
+
+    assert build_sample_timeline is build_sample_timeline_impl
+    assert sample_sequence is sample_sequence_impl
+    assert compute_inference_loss is compute_inference_loss_impl
+    assert effective_lr is effective_lr_impl
+    assert run_eval is run_eval_impl
+    assert should_eval is should_eval_impl
 
 
 def test_rendering_package_exports_renderer_metadata() -> None:

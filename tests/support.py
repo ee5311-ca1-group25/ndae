@@ -27,6 +27,10 @@ from ndae.training import (
     Trainer,
     TrainerComponents,
     TrainerConfig,
+    TrainerLossConfig,
+    TrainerRuntimeConfig,
+    TrainerSchedulerConfig,
+    TrainerStageConfig,
 )
 from ndae.training.system import resolve_renderer_runtime
 
@@ -194,11 +198,30 @@ def make_trainer(
             exemplar_frames=exemplar_frames,
             timeline=timeline,
             crop_size=config.data.crop_size,
-            batch_size=config.train.runtime.batch_size,
-            workspace=workspace,
-            n_iter=config.train.runtime.n_iter,
-            n_init_iter=config.train.stage.n_init_iter,
-            log_every=config.train.runtime.log_every,
-            generator=generator,
+            runtime=TrainerRuntimeConfig(
+                batch_size=config.train.runtime.batch_size,
+                workspace=workspace,
+                n_iter=config.train.runtime.n_iter,
+                log_every=config.train.runtime.log_every,
+                gamma=config.rendering.gamma,
+                generator=generator,
+            ),
+            stage=TrainerStageConfig(
+                n_init_iter=config.train.stage.n_init_iter,
+                refresh_rate_init=config.train.stage.refresh_rate_init,
+                refresh_rate_local=config.train.stage.refresh_rate_local,
+            ),
+            loss=TrainerLossConfig(
+                loss_type=config.train.loss.loss_type,
+                n_loss_crops=config.train.loss.n_loss_crops,
+                overflow_weight=config.train.loss.overflow_weight,
+                init_height_weight=config.train.loss.init_height_weight,
+            ),
+            scheduler=TrainerSchedulerConfig(
+                eval_every=config.train.scheduler.eval_every,
+                scheduler_factor=config.train.scheduler.scheduler_factor,
+                scheduler_patience_evals=config.train.scheduler.scheduler_patience_evals,
+                scheduler_min_lr=config.train.scheduler.scheduler_min_lr,
+            ),
         ),
     )

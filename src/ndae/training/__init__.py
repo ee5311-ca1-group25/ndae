@@ -1,5 +1,12 @@
 """Public training API for NDAE."""
 
+from .config import (
+    TrainerConfig,
+    TrainerLossConfig,
+    TrainerRuntimeConfig,
+    TrainerSchedulerConfig,
+    TrainerStageConfig,
+)
 from .factory import build_trainer
 from .schedule import RefreshSchedule, RolloutWindow, StageConfig
 from .solver import (
@@ -16,7 +23,8 @@ from .checkpoint import (
     resolve_checkpoint_dir,
     save_checkpoint,
 )
-from .trainer import Trainer, TrainerComponents, TrainerConfig, TrainerState
+from .state import TrainerState
+from .trainer import Trainer, TrainerComponents
 
 __all__ = [
     "SVBRDFSystem",
@@ -38,5 +46,9 @@ __all__ = [
     "Trainer",
     "TrainerComponents",
     "TrainerConfig",
+    "TrainerRuntimeConfig",
+    "TrainerStageConfig",
+    "TrainerLossConfig",
+    "TrainerSchedulerConfig",
     "TrainerState",
 ]

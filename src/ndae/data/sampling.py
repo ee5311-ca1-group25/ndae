@@ -129,8 +129,7 @@ def sample_random_take_spec(
     if n > h * w:
         raise ValueError("new_h * new_w must be less than or equal to H * W")
 
-    del h, w
-    indices = torch.randperm(n, generator=generator, device=image.device)
+    indices = torch.randperm(h * w, generator=generator, device=image.device)[:n]
     return CropSampleSpec(kind="take", height=new_h, width=new_w, indices=indices)
 
 
@@ -144,12 +143,10 @@ def apply_take_spec(image: torch.Tensor, spec: CropSampleSpec) -> torch.Tensor:
     if spec.indices.numel() != n:
         raise ValueError("take CropSampleSpec indices must have height * width elements")
     source_count = h * w
-    mapped = torch.floor(((spec.indices.to(dtype=torch.float32) + 0.5) / n) * source_count).to(
-        dtype=torch.long,
-        device=image.device,
-    )
-    mapped = mapped.clamp(max=source_count - 1)
-    return image.reshape(c, -1)[:, mapped].reshape(c, spec.height, spec.width)
+    indices = spec.indices.to(device=image.device, dtype=torch.long)
+    if torch.any(indices < 0) or torch.any(indices >= source_count):
+        raise ValueError("take CropSampleSpec indices must lie inside the source image extent")
+    return image.reshape(c, -1)[:, indices].reshape(c, spec.height, spec.width)
 
 
 def stratified_uniform(

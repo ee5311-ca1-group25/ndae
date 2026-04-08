@@ -363,6 +363,27 @@ def test_sample_random_take_spec_and_apply_are_deterministic() -> None:
     assert torch.equal(apply_take_spec(image, spec1), apply_take_spec(image, spec2))
 
 
+def test_sample_random_take_spec_uses_full_image_randperm_prefix() -> None:
+    image = torch.arange(3 * 8 * 8, dtype=torch.float32).reshape(3, 8, 8)
+    seed = 17
+
+    spec = sample_random_take_spec(image, 4, 4, generator=torch.Generator().manual_seed(seed))
+    expected = torch.randperm(8 * 8, generator=torch.Generator().manual_seed(seed))[: 4 * 4]
+
+    assert torch.equal(spec.indices, expected)
+
+
+def test_apply_take_spec_uses_indices_directly() -> None:
+    image = torch.arange(3 * 4 * 5, dtype=torch.float32).reshape(3, 4, 5)
+    indices = torch.tensor([0, 7, 19, 5], dtype=torch.long)
+    spec = sample_random_take_spec(image, 2, 2, generator=torch.Generator().manual_seed(0))
+    spec.indices = indices
+
+    expected = image.reshape(3, -1)[:, indices].reshape(3, 2, 2)
+
+    assert torch.equal(apply_take_spec(image, spec), expected)
+
+
 def test_stratified_uniform_returns_in_range_ordered_samples() -> None:
     samples = stratified_uniform(
         5,

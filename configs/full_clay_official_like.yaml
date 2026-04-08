@@ -1,19 +1,17 @@
 # Closest match to the official JAX svBRDF training defaults, within the
 # constraints of this PyTorch reimplementation.
 #
-# Official settings that are approximated here:
+# Official settings represented here:
 # - 60,000 total iterations
 # - 20,000 init iterations
 # - lr = 5e-4
 # - 256x256 exemplar frames with 128x128 random training crops
 # - 256x256 sampling size
-# - roughly 500-step evaluation / checkpoint cadence
+# - roughly 500-step evaluation cadence
 #
 # Official behaviors that remain approximated rather than fully matched in
 # runtime semantics:
-# - reduce-on-plateau LR schedule driven by eval-time inference loss
-# - eval-driven checkpoint cadence and resume semantics
-# - official synthesis + transition sample timeline
+# - checkpoint payloads remain PyTorch-native rather than JAX-compatible
 
 experiment:
   name: full_clay_solidifying_official_like

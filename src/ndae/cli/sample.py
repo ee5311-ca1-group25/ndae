@@ -6,10 +6,9 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-import torch
-
 from ndae.config import load_config
 from ndae.data import Timeline
+from ndae.evaluation import sample_sequence
 from ndae.training import (
     build_svbrdf_system,
     load_sample_checkpoint,
@@ -61,33 +60,13 @@ def run_sample_cli(argv: Sequence[str] | None = None) -> int:
 
     system = build_svbrdf_system(config)
     load_sample_checkpoint(checkpoint_dir, system.trajectory_model, system.flash_light)
-    system.trajectory_model.eval()
-
-    generator = torch.Generator().manual_seed(config.experiment.seed)
-    model_dtype = next(system.trajectory_model.parameters()).dtype
-    z0 = torch.randn(
-        1,
-        system.total_channels,
-        sample_size,
-        sample_size,
-        generator=generator,
-        dtype=model_dtype,
-    )
     timeline = Timeline.from_config(config.data)
-    t_eval = torch.tensor(
-        [config.data.t_I, *[timeline.frame_to_time(k) for k in range(timeline.n_frames)]],
-        dtype=z0.dtype,
+    states, synthesis_count = sample_sequence(
+        system,
+        timeline,
+        sample_size=sample_size,
+        seed=config.experiment.seed,
     )
-
-    with torch.no_grad():
-        states = system.trajectory_model(
-            z0,
-            t_eval,
-            method=system.solver_config.method,
-            rtol=system.solver_config.rtol,
-            atol=system.solver_config.atol,
-            **(system.solver_config.options or {}),
-        )
 
     output_dir = (
         Path(args.output_dir)
@@ -95,13 +74,14 @@ def run_sample_cli(argv: Sequence[str] | None = None) -> int:
         else workspace / "samples" / checkpoint_dir.name
     )
     output_dir.mkdir(parents=True, exist_ok=True)
-    for index, state in enumerate(states[1:, 0]):
+    for index, state in enumerate(states[synthesis_count:, 0]):
         save_png_image(output_dir / f"frames_{index:04d}.png", render_latent_state(system, state))
 
     print("Sample generation completed.")
     print(f"checkpoint: {checkpoint_dir}")
     print(f"output_dir: {output_dir.resolve()}")
-    print(f"frames: {config.data.n_frames}")
+    print(f"transition_frames: {config.data.n_frames}")
+    print(f"synthesis_frames: {synthesis_count}")
     print(f"sample_size: {sample_size}")
     return 0
 

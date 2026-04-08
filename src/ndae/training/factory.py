@@ -13,7 +13,14 @@ from ndae.losses import VGG19Features
 
 from .schedule import RefreshSchedule, StageConfig
 from .system import build_svbrdf_system
-from .trainer import Trainer, TrainerComponents, TrainerConfig
+from .config import (
+    TrainerConfig,
+    TrainerLossConfig,
+    TrainerRuntimeConfig,
+    TrainerSchedulerConfig,
+    TrainerStageConfig,
+)
+from .trainer import Trainer, TrainerComponents
 
 
 def build_trainer(
@@ -32,21 +39,24 @@ def build_trainer(
         base_dir=dataset_base_dir or Path.cwd(),
     )
     timeline = Timeline.from_config(config.data)
+    trainer_stage = TrainerStageConfig(
+        n_init_iter=config.train.stage.n_init_iter,
+        refresh_rate_init=config.train.stage.refresh_rate_init,
+        refresh_rate_local=config.train.stage.refresh_rate_local,
+    )
     init_stage_config = StageConfig(
         t_init=config.data.t_I,
         t_start=config.data.t_S,
         t_end=config.data.t_E,
-        refresh_rate=config.train.stage.refresh_rate_init,
+        refresh_rate=trainer_stage.refresh_rate_init,
     )
     local_stage_config = StageConfig(
         t_init=config.data.t_I,
         t_start=config.data.t_S,
         t_end=config.data.t_E,
-        refresh_rate=config.train.stage.refresh_rate_local,
+        refresh_rate=trainer_stage.refresh_rate_local,
     )
-    initial_stage_config = (
-        init_stage_config if config.train.stage.n_init_iter > 0 else local_stage_config
-    )
+    initial_stage_config = init_stage_config if trainer_stage.n_init_iter > 0 else local_stage_config
     schedule = RefreshSchedule(initial_stage_config, generator=generator)
     vgg_features = vgg_features or VGG19Features()
 
@@ -72,17 +82,27 @@ def build_trainer(
             exemplar_frames=dataset.frames,
             timeline=timeline,
             crop_size=config.data.crop_size,
-            batch_size=config.train.runtime.batch_size,
-            workspace=workspace,
-            n_iter=config.train.runtime.n_iter,
-            n_init_iter=config.train.stage.n_init_iter,
-            log_every=config.train.runtime.log_every,
-            loss_type=config.train.loss.loss_type,
-            n_loss_crops=config.train.loss.n_loss_crops,
-            overflow_weight=config.train.loss.overflow_weight,
-            init_height_weight=config.train.loss.init_height_weight,
-            gamma=config.rendering.gamma,
-            generator=generator,
+            runtime=TrainerRuntimeConfig(
+                batch_size=config.train.runtime.batch_size,
+                workspace=workspace,
+                n_iter=config.train.runtime.n_iter,
+                log_every=config.train.runtime.log_every,
+                gamma=config.rendering.gamma,
+                generator=generator,
+            ),
+            stage=trainer_stage,
+            loss=TrainerLossConfig(
+                loss_type=config.train.loss.loss_type,
+                n_loss_crops=config.train.loss.n_loss_crops,
+                overflow_weight=config.train.loss.overflow_weight,
+                init_height_weight=config.train.loss.init_height_weight,
+            ),
+            scheduler=TrainerSchedulerConfig(
+                eval_every=config.train.scheduler.eval_every,
+                scheduler_factor=config.train.scheduler.scheduler_factor,
+                scheduler_patience_evals=config.train.scheduler.scheduler_patience_evals,
+                scheduler_min_lr=config.train.scheduler.scheduler_min_lr,
+            ),
         ),
     )
 
