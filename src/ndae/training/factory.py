@@ -77,6 +77,11 @@ def build_trainer(
             n_iter=config.train.runtime.n_iter,
             n_init_iter=config.train.stage.n_init_iter,
             log_every=config.train.runtime.log_every,
+            loss_type=config.train.loss.loss_type,
+            n_loss_crops=config.train.loss.n_loss_crops,
+            overflow_weight=config.train.loss.overflow_weight,
+            init_height_weight=config.train.loss.init_height_weight,
+            gamma=config.rendering.gamma,
             generator=generator,
         ),
     )

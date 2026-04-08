@@ -15,8 +15,10 @@ from ndae.rendering import (
     select_renderer,
     unpack_brdf_diffuse_cook_torrance,
 )
+import ndae.training.trainer as trainer_module
 from ndae.training import (
     RefreshSchedule,
+    RolloutResult,
     SVBRDFSystem,
     SolverConfig,
     StageConfig,
@@ -38,6 +40,10 @@ def make_trainer(
     n_iter: int = 3,
     n_init_iter: int = 1,
     log_every: int = 1,
+    loss_type: str = "SW",
+    n_loss_crops: int = 2,
+    overflow_weight: float = 100.0,
+    init_height_weight: float = 1.0,
 ) -> Trainer:
     renderer_spec = select_renderer("diffuse_cook_torrance")
     rendering = RenderingConfig(
@@ -115,6 +121,11 @@ def make_trainer(
             n_iter=n_iter,
             n_init_iter=n_init_iter,
             log_every=log_every,
+            loss_type=loss_type,
+            n_loss_crops=n_loss_crops,
+            overflow_weight=overflow_weight,
+            init_height_weight=init_height_weight,
+            gamma=rendering.gamma,
             generator=generator,
         ),
     )
@@ -203,3 +214,172 @@ def test_trainer_run_writes_metrics_jsonl(tmp_path: Path) -> None:
         "loss_local",
         "loss_overflow",
     } <= payloads[0].keys()
+
+
+def test_trainer_init_stage_uses_random_take_specs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=1, n_loss_crops=3)
+    calls = {"take": 0, "crop": 0}
+
+    def fake_take_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+        del args, kwargs
+        calls["take"] += 1
+        return trainer_module.CropSampleSpec(
+            kind="take",
+            height=trainer.crop_size,
+            width=trainer.crop_size,
+            indices=torch.arange(trainer.crop_size * trainer.crop_size),
+        )
+
+    def fake_crop_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+        del args, kwargs
+        calls["crop"] += 1
+        return trainer_module.CropSampleSpec(
+            kind="rect",
+            height=trainer.crop_size,
+            width=trainer.crop_size,
+            top=0,
+            left=0,
+        )
+
+    monkeypatch.setattr(trainer_module, "sample_random_take_spec", fake_take_spec)
+    monkeypatch.setattr(trainer_module, "sample_random_crop_spec", fake_crop_spec)
+
+    trainer.step()
+
+    assert calls["take"] == 3
+    assert calls["crop"] == 0
+
+
+def test_trainer_local_stage_uses_random_crop_specs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=0, n_loss_crops=4)
+    calls = {"take": 0, "crop": 0}
+
+    def fake_take_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+        del args, kwargs
+        calls["take"] += 1
+        return trainer_module.CropSampleSpec(
+            kind="take",
+            height=trainer.crop_size,
+            width=trainer.crop_size,
+            indices=torch.arange(trainer.crop_size * trainer.crop_size),
+        )
+
+    def fake_crop_spec(*args: object, **kwargs: object) -> trainer_module.CropSampleSpec:
+        del args, kwargs
+        calls["crop"] += 1
+        return trainer_module.CropSampleSpec(
+            kind="rect",
+            height=trainer.crop_size,
+            width=trainer.crop_size,
+            top=0,
+            left=0,
+        )
+
+    monkeypatch.setattr(trainer_module, "sample_random_take_spec", fake_take_spec)
+    monkeypatch.setattr(trainer_module, "sample_random_crop_spec", fake_crop_spec)
+
+    trainer.step()
+
+    assert calls["take"] == 0
+    assert calls["crop"] == 4
+
+
+def test_trainer_multicrop_uses_all_samples(tmp_path: Path) -> None:
+    trainer = make_trainer(tmp_path, batch_size=2, n_init_iter=0, n_loss_crops=3)
+    brdf_maps = torch.full((2, 8, 8, 8), 0.5)
+    height_map = torch.zeros(2, 1, 8, 8)
+
+    sampled = trainer._sample_target_batch(
+        0,
+        current_stage="local",
+        brdf_maps=brdf_maps,
+        height_map=height_map,
+    )
+
+    assert sampled["target"].shape == (6, 3, 8, 8)
+    assert sampled["rendered"].shape == (6, 3, 8, 8)
+
+
+def test_trainer_init_loss_includes_height_and_weighted_overflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trainer = make_trainer(
+        tmp_path,
+        n_init_iter=1,
+        n_loss_crops=1,
+        overflow_weight=7.0,
+        init_height_weight=3.0,
+    )
+    window = trainer.schedule.next(iteration=0, carry_time=trainer.state.carry_time)
+    final_state = torch.zeros(
+        trainer.batch_size,
+        trainer.system.total_channels,
+        trainer.crop_size,
+        trainer.crop_size,
+        dtype=trainer.dtype,
+        device=trainer.device,
+        requires_grad=True,
+    )
+
+    def fake_rollout(*args: object, **kwargs: object) -> RolloutResult:
+        del args, kwargs
+        return RolloutResult(states=final_state.unsqueeze(0), final_state=final_state, t0=window.t0, t1=window.t1)
+
+    def fake_project_state(state: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        del state
+        brdf = torch.full(
+            (trainer.batch_size, trainer.system.n_brdf_channels, trainer.crop_size, trainer.crop_size),
+            -1.0,
+            dtype=trainer.dtype,
+            device=trainer.device,
+        )
+        height = torch.ones(
+            trainer.batch_size,
+            trainer.system.n_normal_channels,
+            trainer.crop_size,
+            trainer.crop_size,
+            dtype=trainer.dtype,
+            device=trainer.device,
+        )
+        return brdf, height
+
+    def fake_sample_target_batch(*args: object, **kwargs: object) -> dict[str, torch.Tensor]:
+        del args, kwargs
+        rendered = torch.zeros(
+            1,
+            3,
+            trainer.crop_size,
+            trainer.crop_size,
+            dtype=trainer.dtype,
+            device=trainer.device,
+            requires_grad=True,
+        )
+        return {"target": torch.zeros_like(rendered), "rendered": rendered}
+
+    monkeypatch.setattr(trainer_module, "rollout_warmup", fake_rollout)
+    monkeypatch.setattr(trainer, "_project_state", fake_project_state)
+    monkeypatch.setattr(trainer, "_sample_target_batch", fake_sample_target_batch)
+
+    metrics = trainer.step()
+
+    expected_overflow = 7.0 * float(((-1.0 - 1e-6) ** 2))
+    expected_height = 3.0
+    assert metrics["loss_overflow"] == pytest.approx(expected_overflow)
+    assert metrics["loss_init"] == pytest.approx(expected_height)
+    assert metrics["loss_total"] == pytest.approx(expected_overflow + expected_height)
+
+
+def test_trainer_local_stage_supports_gram_loss(tmp_path: Path) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=0, loss_type="GRAM", n_loss_crops=1)
+
+    metrics = trainer.step()
+
+    assert metrics["stage"] == "local"
+    assert metrics["loss_local"] >= 0.0

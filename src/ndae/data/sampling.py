@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 import torch
 
 
@@ -31,6 +34,69 @@ def random_crop(
     return image[:, top : top + crop_h, left : left + crop_w]
 
 
+@dataclass(slots=True)
+class CropSampleSpec:
+    """Describe one training-space sample shared by target and rendering paths."""
+
+    kind: Literal["rect", "take"]
+    height: int
+    width: int
+    top: int | None = None
+    left: int | None = None
+    top_ratio: float | None = None
+    left_ratio: float | None = None
+    indices: torch.Tensor | None = None
+
+
+def sample_random_crop_spec(
+    image: torch.Tensor,
+    crop_h: int,
+    crop_w: int,
+    *,
+    generator: torch.Generator | None = None,
+) -> CropSampleSpec:
+    _, h, w = _validate_image_tensor(image, fn_name="sample_random_crop_spec")
+    if crop_h <= 0 or crop_w <= 0:
+        raise ValueError("crop_h and crop_w must be greater than 0")
+    if crop_h > h or crop_w > w:
+        raise ValueError("crop size must be less than or equal to image size")
+
+    max_top = h - crop_h
+    max_left = w - crop_w
+    top = torch.randint(0, max_top + 1, (), generator=generator, device=image.device).item()
+    left = torch.randint(0, max_left + 1, (), generator=generator, device=image.device).item()
+    top_ratio = 0.0 if max_top == 0 else top / max_top
+    left_ratio = 0.0 if max_left == 0 else left / max_left
+    return CropSampleSpec(
+        kind="rect",
+        height=crop_h,
+        width=crop_w,
+        top=top,
+        left=left,
+        top_ratio=top_ratio,
+        left_ratio=left_ratio,
+    )
+
+
+def apply_crop_spec(image: torch.Tensor, spec: CropSampleSpec) -> torch.Tensor:
+    _, h, w = _validate_image_tensor(image, fn_name="apply_crop_spec")
+    if spec.kind != "rect":
+        raise ValueError("apply_crop_spec expects a rect CropSampleSpec")
+    max_top = h - spec.height
+    max_left = w - spec.width
+    if max_top < 0 or max_left < 0:
+        raise ValueError("crop size must be less than or equal to image size")
+    if spec.top_ratio is not None and spec.left_ratio is not None:
+        top = 0 if max_top == 0 else int(round(spec.top_ratio * max_top))
+        left = 0 if max_left == 0 else int(round(spec.left_ratio * max_left))
+    elif spec.top is not None and spec.left is not None:
+        top = spec.top
+        left = spec.left
+    else:
+        raise ValueError("rect CropSampleSpec requires top/left or ratio fields")
+    return image[:, top : top + spec.height, left : left + spec.width]
+
+
 def random_take(
     image: torch.Tensor,
     new_h: int,
@@ -43,12 +109,47 @@ def random_take(
     if new_h <= 0 or new_w <= 0:
         raise ValueError("new_h and new_w must be greater than 0")
 
+    spec = sample_random_take_spec(image, new_h, new_w, generator=generator)
+    return apply_take_spec(image, spec)
+
+
+def sample_random_take_spec(
+    image: torch.Tensor,
+    new_h: int,
+    new_w: int,
+    *,
+    generator: torch.Generator | None = None,
+) -> CropSampleSpec:
+    _, h, w = _validate_image_tensor(image, fn_name="sample_random_take_spec")
+
+    if new_h <= 0 or new_w <= 0:
+        raise ValueError("new_h and new_w must be greater than 0")
+
     n = new_h * new_w
     if n > h * w:
         raise ValueError("new_h * new_w must be less than or equal to H * W")
 
-    indices = torch.randperm(h * w, generator=generator, device=image.device)[:n]
-    return image.reshape(c, -1)[:, indices].reshape(c, new_h, new_w)
+    del h, w
+    indices = torch.randperm(n, generator=generator, device=image.device)
+    return CropSampleSpec(kind="take", height=new_h, width=new_w, indices=indices)
+
+
+def apply_take_spec(image: torch.Tensor, spec: CropSampleSpec) -> torch.Tensor:
+    c, h, w = _validate_image_tensor(image, fn_name="apply_take_spec")
+    if spec.kind != "take":
+        raise ValueError("apply_take_spec expects a take CropSampleSpec")
+    if spec.indices is None:
+        raise ValueError("take CropSampleSpec requires indices")
+    n = spec.height * spec.width
+    if spec.indices.numel() != n:
+        raise ValueError("take CropSampleSpec indices must have height * width elements")
+    source_count = h * w
+    mapped = torch.floor(((spec.indices.to(dtype=torch.float32) + 0.5) / n) * source_count).to(
+        dtype=torch.long,
+        device=image.device,
+    )
+    mapped = mapped.clamp(max=source_count - 1)
+    return image.reshape(c, -1)[:, mapped].reshape(c, spec.height, spec.width)
 
 
 def stratified_uniform(

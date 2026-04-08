@@ -8,9 +8,13 @@ from PIL import Image
 from ndae.config import DataConfig, load_config
 from ndae.data.exemplar import ExemplarDataset
 from ndae.data.sampling import (
+    apply_crop_spec,
+    apply_take_spec,
     random_crop,
     random_take,
     sample_frame_indices,
+    sample_random_crop_spec,
+    sample_random_take_spec,
     stratified_uniform,
 )
 from ndae.data.timeline import Timeline
@@ -331,6 +335,32 @@ def test_random_take_rejects_invalid_shape_or_sample_size() -> None:
 
     with pytest.raises(ValueError, match="less than or equal to H \\* W"):
         random_take(image, 9, 9)
+
+
+def test_sample_random_crop_spec_and_apply_are_deterministic() -> None:
+    image = torch.arange(3 * 8 * 8, dtype=torch.float32).reshape(3, 8, 8)
+    g1 = torch.Generator().manual_seed(5)
+    g2 = torch.Generator().manual_seed(5)
+
+    spec1 = sample_random_crop_spec(image, 4, 4, generator=g1)
+    spec2 = sample_random_crop_spec(image, 4, 4, generator=g2)
+
+    assert spec1 == spec2
+    assert torch.equal(apply_crop_spec(image, spec1), apply_crop_spec(image, spec2))
+
+
+def test_sample_random_take_spec_and_apply_are_deterministic() -> None:
+    image = torch.arange(3 * 8 * 8, dtype=torch.float32).reshape(3, 8, 8)
+    g1 = torch.Generator().manual_seed(9)
+    g2 = torch.Generator().manual_seed(9)
+
+    spec1 = sample_random_take_spec(image, 4, 4, generator=g1)
+    spec2 = sample_random_take_spec(image, 4, 4, generator=g2)
+
+    assert spec1.kind == "take"
+    assert spec2.kind == "take"
+    assert torch.equal(spec1.indices, spec2.indices)
+    assert torch.equal(apply_take_spec(image, spec1), apply_take_spec(image, spec2))
 
 
 def test_stratified_uniform_returns_in_range_ordered_samples() -> None:

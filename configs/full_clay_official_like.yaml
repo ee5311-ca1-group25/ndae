@@ -9,10 +9,11 @@
 # - 256x256 sampling size
 # - roughly 500-step evaluation / checkpoint cadence
 #
-# Official behaviors that are now represented in config, but not yet fully
-# implemented end-to-end in runtime semantics:
+# Official behaviors that remain approximated rather than fully matched in
+# runtime semantics:
 # - reduce-on-plateau LR schedule driven by eval-time inference loss
-# - multi-crop / shuffle loss estimation per iteration
+# - eval-driven checkpoint cadence and resume semantics
+# - official synthesis + transition sample timeline
 
 experiment:
   name: full_clay_solidifying_official_like

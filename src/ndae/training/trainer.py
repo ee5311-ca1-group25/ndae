@@ -10,12 +10,19 @@ from typing import Callable, Literal
 import torch
 import torch.nn as nn
 
-from ..data import Timeline, random_crop
+from ..data import (
+    CropSampleSpec,
+    Timeline,
+    apply_crop_spec,
+    apply_take_spec,
+    sample_random_crop_spec,
+    sample_random_take_spec,
+)
 from ..losses import init_loss, local_loss, overflow_loss
-from ..rendering import split_latent_maps
+from ..rendering import clip_maps, height_to_normal, render_svbrdf, split_latent_maps, tonemapping
 from .schedule import RefreshSchedule, StageConfig
 from .solver import rollout_generation, rollout_warmup
-from .system import SVBRDFSystem, render_latent_state
+from .system import SVBRDFSystem
 
 
 @dataclass(slots=True)
@@ -53,6 +60,11 @@ class TrainerConfig:
     n_iter: int
     n_init_iter: int
     log_every: int
+    loss_type: str = "SW"
+    n_loss_crops: int = 32
+    overflow_weight: float = 100.0
+    init_height_weight: float = 1.0
+    gamma: float = 2.2
     generator: torch.Generator | None = None
     device: torch.device | None = None
 
@@ -81,6 +93,11 @@ class Trainer:
         self.n_iter = config.n_iter
         self.n_init_iter = config.n_init_iter
         self.log_every = config.log_every
+        self.loss_type = config.loss_type
+        self.n_loss_crops = config.n_loss_crops
+        self.overflow_weight = config.overflow_weight
+        self.init_height_weight = config.init_height_weight
+        self.gamma = config.gamma
         self.generator = config.generator
         self.device = config.device or next(self.trajectory_model.parameters()).device
         self.dtype = next(self.trajectory_model.parameters()).dtype
@@ -130,22 +147,30 @@ class Trainer:
             )
         )
 
-        rendered, brdf_maps = self._project_state(rollout.final_state)
+        brdf_maps, height_map = self._project_state(rollout.final_state)
         target_index = self.timeline.time_to_frame(window.t1)
-        target = self._sample_target_batch(target_index)
+        target = self._sample_target_batch(
+            target_index,
+            current_stage=current_stage,
+            brdf_maps=brdf_maps,
+            height_map=height_map,
+        )
 
         loss_init = torch.zeros((), device=self.device, dtype=self.dtype)
         loss_local = torch.zeros((), device=self.device, dtype=self.dtype)
-        loss_overflow = overflow_loss(brdf_maps)
+        loss_overflow = self.overflow_weight * overflow_loss(brdf_maps)
         if current_stage == "init":
-            loss_init = init_loss(rendered, target)
+            rendered = target["rendered"]
+            loss_height = self.init_height_weight * (height_map.square().mean())
+            loss_init = init_loss(rendered, target["target"]) + loss_height
             loss_total = loss_init + loss_overflow
         else:
+            rendered = target["rendered"]
             loss_local = local_loss(
                 self.vgg_features,
                 rendered,
-                target,
-                loss_type="SW",
+                target["target"],
+                loss_type=self.loss_type,
                 generator=self.generator,
             )
             loss_total = loss_local + loss_overflow
@@ -219,31 +244,123 @@ class Trainer:
             raise RuntimeError("Trainer requires carry_state for generation windows.")
         return self.state.carry_state.detach()
 
-    def _sample_target_batch(self, target_index: int) -> torch.Tensor:
+    def _sample_target_batch(
+        self,
+        target_index: int,
+        *,
+        current_stage: Literal["init", "local"],
+        brdf_maps: torch.Tensor,
+        height_map: torch.Tensor,
+    ) -> dict[str, torch.Tensor]:
         target_frame = self.exemplar_frames[target_index]
-        return torch.stack(
-            [
-                random_crop(
-                    target_frame,
-                    self.crop_size,
-                    self.crop_size,
-                    generator=self.generator,
+        zero_normal = height_to_normal(torch.zeros_like(height_map), scale=self.system.height_scale)
+        true_normal = height_to_normal(height_map, scale=self.system.height_scale)
+        targets: list[torch.Tensor] = []
+        renderings: list[torch.Tensor] = []
+
+        for batch_index in range(self.batch_size):
+            for _ in range(self.n_loss_crops):
+                spec = self._sample_spec(target_frame, current_stage=current_stage)
+                targets.append(self._apply_target_spec(target_frame, spec))
+                renderings.append(
+                    self._render_sample(
+                        brdf_maps[batch_index],
+                        zero_normal[batch_index] if current_stage == "init" else true_normal[batch_index],
+                        spec,
+                    )
                 )
-                for _ in range(self.batch_size)
-            ],
-            dim=0,
+
+        target_batch = torch.stack(targets, dim=0)
+        rendered_batch = tonemapping(torch.stack(renderings, dim=0), gamma=self.gamma)
+        return {"target": target_batch, "rendered": rendered_batch}
+
+    def _sample_spec(
+        self,
+        target_frame: torch.Tensor,
+        *,
+        current_stage: Literal["init", "local"],
+    ) -> CropSampleSpec:
+        if current_stage == "init":
+            return sample_random_take_spec(
+                target_frame,
+                self.crop_size,
+                self.crop_size,
+                generator=self.generator,
+            )
+        return sample_random_crop_spec(
+            target_frame,
+            self.crop_size,
+            self.crop_size,
+            generator=self.generator,
         )
+
+    def _apply_target_spec(self, target_frame: torch.Tensor, spec: CropSampleSpec) -> torch.Tensor:
+        if spec.kind == "take":
+            return apply_take_spec(target_frame, spec)
+        return apply_crop_spec(target_frame, spec)
+
+    def _render_sample(
+        self,
+        brdf_maps: torch.Tensor,
+        normal_map: torch.Tensor,
+        spec: CropSampleSpec,
+    ) -> torch.Tensor:
+        clipped_maps = clip_maps(brdf_maps)
+        if spec.kind == "take":
+            sample_brdf = apply_take_spec(clipped_maps, spec)
+            sample_normal = apply_take_spec(normal_map, spec)
+            return render_svbrdf(
+                sample_brdf,
+                sample_normal,
+                self.system.camera,
+                self.system.flash_light,
+                self.system.renderer_pp,
+                self.system.unpack_fn,
+            )
+
+        sample_brdf = apply_crop_spec(clipped_maps, spec)
+        sample_normal = apply_crop_spec(normal_map, spec)
+        top, left = self._region_origin_for(brdf_maps, spec)
+        return render_svbrdf(
+            sample_brdf,
+            sample_normal,
+            self.system.camera,
+            self.system.flash_light,
+            self.system.renderer_pp,
+            self.system.unpack_fn,
+            full_height=brdf_maps.shape[-2],
+            full_width=brdf_maps.shape[-1],
+            region=(top, left, spec.height, spec.width),
+        )
+
+    def _region_origin_for(
+        self,
+        image: torch.Tensor,
+        spec: CropSampleSpec,
+    ) -> tuple[int, int]:
+        _, h, w = image.shape
+        max_top = h - spec.height
+        max_left = w - spec.width
+        if max_top < 0 or max_left < 0:
+            raise ValueError("crop size must be less than or equal to image size")
+        if spec.top_ratio is not None and spec.left_ratio is not None:
+            top = 0 if max_top == 0 else int(round(spec.top_ratio * max_top))
+            left = 0 if max_left == 0 else int(round(spec.left_ratio * max_left))
+            return top, left
+        if spec.top is None or spec.left is None:
+            raise ValueError("rect CropSampleSpec requires top/left or ratio fields")
+        return spec.top, spec.left
 
     def _project_state(
         self,
         state: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        brdf_maps, _ = split_latent_maps(
+        brdf_maps, height_map = split_latent_maps(
             state,
             n_brdf_channels=self.system.n_brdf_channels,
             n_normal_channels=self.system.n_normal_channels,
         )
-        return render_latent_state(self.system, state), brdf_maps
+        return brdf_maps, height_map
 
     def _log_metrics(self, metrics: dict[str, float | int | str]) -> None:
         line = json.dumps(metrics, sort_keys=True)

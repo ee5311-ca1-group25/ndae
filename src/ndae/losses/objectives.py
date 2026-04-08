@@ -33,11 +33,12 @@ def local_loss(
     generator: torch.Generator | None = None,
 ) -> torch.Tensor:
     """Dispatch the Local-stage loss to SWD or Gram statistics."""
-    if loss_type == "SW":
+    normalized = loss_type.upper()
+    if normalized == "SW":
         return slice_loss(vgg, target, rendered, generator=generator)
-    if loss_type == "gram":
+    if normalized == "GRAM":
         return gram_loss(vgg, target, rendered, generator=generator)
-    raise ValueError(f"Unknown loss_type: {loss_type!r}. Must be 'SW' or 'gram'.")
+    raise ValueError(f"Unknown loss_type: {loss_type!r}. Must be 'SW' or 'GRAM'.")
 
 
 __all__ = ["overflow_loss", "init_loss", "local_loss"]

@@ -332,7 +332,7 @@ def test_local_loss_gram_same_input_zero(monkeypatch: pytest.MonkeyPatch) -> Non
     model = perceptual.VGG19Features()
     image = torch.rand(1, 3, 64, 64)
 
-    loss = local_loss(model, image, image, loss_type="gram")
+    loss = local_loss(model, image, image, loss_type="GRAM")
 
     assert loss.shape == ()
     assert loss.item() < 1e-6
@@ -352,7 +352,7 @@ def test_local_loss_sw_and_gram_modes_positive(monkeypatch: pytest.MonkeyPatch) 
         loss_type="SW",
         generator=torch.Generator().manual_seed(17),
     )
-    gram = local_loss(model, rendered, target, loss_type="gram")
+    gram = local_loss(model, rendered, target, loss_type="GRAM")
 
     assert sw_loss.item() > 0.0
     assert gram.item() > 0.0
@@ -388,7 +388,7 @@ def test_full_pipeline_gradient(monkeypatch: pytest.MonkeyPatch) -> None:
     tone_mapped = tonemapping(rendered).unsqueeze(0)
     target = tone_mapped.detach().roll(shifts=1, dims=-1)
 
-    loss = local_loss(model, tone_mapped, target, loss_type="gram")
+    loss = local_loss(model, tone_mapped, target, loss_type="GRAM")
     loss.backward()
 
     assert z.grad is not None
