@@ -44,11 +44,13 @@ def save_checkpoint(workspace: Path, trainer: Trainer) -> Path:
     model_path = checkpoint_dir / "model.pt"
     optimizer_path = checkpoint_dir / "optimizer.pt"
     trainer_state_path = checkpoint_dir / "trainer_state.pt"
+    flashlight_path = checkpoint_dir / "flashlight.pt"
     meta_path = checkpoint_dir / "meta.json"
 
     torch.save(trainer.trajectory_model.state_dict(), model_path)
     torch.save(trainer.optimizer.state_dict(), optimizer_path)
     torch.save(_trainer_state_payload(trainer.state), trainer_state_path)
+    torch.save(_flashlight_payload(trainer.system.flash_light), flashlight_path)
 
     resume_ready = trainer.state.cycle_step == 0
     meta = {
@@ -58,6 +60,7 @@ def save_checkpoint(workspace: Path, trainer: Trainer) -> Path:
         "cycle_step": trainer.state.cycle_step,
         "saved_at_refresh_boundary": resume_ready,
         "files": [
+            "flashlight.pt",
             "meta.json",
             "model.pt",
             "optimizer.pt",
@@ -95,6 +98,12 @@ def load_resume_checkpoint(checkpoint_dir: Path, trainer: Trainer) -> TrainerSta
     trainer.trajectory_model.load_state_dict(
         torch.load(resolved_dir / "model.pt", map_location=trainer.device)
     )
+    _load_flashlight_state(
+        resolved_dir / "flashlight.pt",
+        trainer.system.flash_light,
+        device=trainer.device,
+        dtype=trainer.dtype,
+    )
     trainer.optimizer.load_state_dict(
         torch.load(resolved_dir / "optimizer.pt", map_location=trainer.device)
     )
@@ -103,14 +112,33 @@ def load_resume_checkpoint(checkpoint_dir: Path, trainer: Trainer) -> TrainerSta
     return trainer.state
 
 
-def load_sample_checkpoint(checkpoint_dir: Path, model: torch.nn.Module) -> dict[str, object]:
+def load_sample_checkpoint(
+    checkpoint_dir: Path,
+    model: torch.nn.Module,
+    flash_light,
+) -> dict[str, object]:
     """Restore model weights for sample-only inference and return checkpoint metadata."""
     resolved_dir = resolve_checkpoint_dir(checkpoint_dir)
-    model.load_state_dict(torch.load(resolved_dir / "model.pt", map_location="cpu"))
+    device = next(model.parameters()).device
+    dtype = next(model.parameters()).dtype
+    model.load_state_dict(torch.load(resolved_dir / "model.pt", map_location=device))
+    _load_flashlight_state(
+        resolved_dir / "flashlight.pt",
+        flash_light,
+        device=device,
+        dtype=dtype,
+    )
     return {
         "checkpoint_dir": resolved_dir,
         "meta": _load_meta(resolved_dir),
     }
+
+
+def _flashlight_payload(flash_light) -> dict[str, torch.Tensor]:
+    intensity = flash_light.intensity
+    if isinstance(intensity, torch.Tensor):
+        return {"intensity": intensity.detach().cpu()}
+    return {"intensity": torch.tensor(float(intensity), dtype=torch.float32)}
 
 
 def _trainer_state_payload(state: TrainerState) -> dict[str, object]:
@@ -144,6 +172,23 @@ def _load_trainer_state(
 
 def _load_meta(checkpoint_dir: Path) -> dict[str, object]:
     return json.loads((checkpoint_dir / "meta.json").read_text(encoding="utf-8"))
+
+
+def _load_flashlight_state(
+    flashlight_path: Path,
+    flash_light,
+    *,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> None:
+    if not flashlight_path.is_file():
+        raise FileNotFoundError(f"Checkpoint is missing flashlight state: {flashlight_path}")
+    payload = torch.load(flashlight_path, map_location=device)
+    intensity = payload["intensity"].to(device=device, dtype=dtype)
+    if isinstance(flash_light.intensity, torch.Tensor):
+        flash_light.intensity.data.copy_(intensity)
+        return
+    flash_light.intensity = float(intensity.item())
 
 
 __all__ = [

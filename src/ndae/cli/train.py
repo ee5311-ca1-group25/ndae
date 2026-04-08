@@ -69,7 +69,13 @@ def run_train_cli(argv: Sequence[str] | None = None) -> int:
     if config.train.resume_from is not None:
         load_resume_checkpoint(Path(config.train.resume_from), trainer)
         print(f"Resumed from checkpoint: {Path(config.train.resume_from).resolve()}")
-    trainer.run(make_checkpoint_callback(config, workspace))
+    trainer.run(
+        make_checkpoint_callback(
+            config,
+            workspace,
+            initial_checkpoint_step=trainer.state.global_step,
+        )
+    )
     print("Training completed.")
     return 0
 
@@ -98,12 +104,18 @@ def apply_overrides(
 def make_checkpoint_callback(
     config: NDAEConfig,
     workspace: Path,
+    *,
+    initial_checkpoint_step: int = 0,
 ) -> Callable[[Trainer], None]:
+    last_checkpoint_step = initial_checkpoint_step
+
     def callback(trainer: Trainer) -> None:
-        if trainer.state.global_step % config.train.checkpoint_every != 0:
-            return
         if trainer.state.cycle_step != 0:
             return
+        nonlocal last_checkpoint_step
+        if trainer.state.global_step - last_checkpoint_step < config.train.checkpoint_every:
+            return
         save_checkpoint(workspace, trainer)
+        last_checkpoint_step = trainer.state.global_step
 
     return callback

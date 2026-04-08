@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import torch
+import torch.nn as nn
 
 from ndae.config import NDAEConfig
 from ndae.models import NDAEUNet, ODEFunction, TrajectoryModel
@@ -64,7 +65,7 @@ def build_svbrdf_system(config: NDAEConfig) -> SVBRDFSystem:
         distance=config.rendering.camera_distance,
     )
     flash_light = FlashLight(
-        intensity=config.rendering.light_intensity,
+        intensity=nn.Parameter(torch.tensor(config.rendering.light_intensity, dtype=torch.float32)),
         xy_position=config.rendering.light_xy_position,
     )
     return SVBRDFSystem(

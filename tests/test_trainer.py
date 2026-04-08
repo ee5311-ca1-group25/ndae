@@ -71,9 +71,10 @@ def make_trainer(
         refresh_rate=3,
     )
     schedule = RefreshSchedule(stage_config, generator=generator)
+    flash_light = FlashLight(intensity=torch.nn.Parameter(torch.tensor(0.0)))
 
     def optimizer_factory() -> torch.optim.Optimizer:
-        return torch.optim.Adam(model.parameters(), lr=1e-2)
+        return torch.optim.Adam([*model.parameters(), flash_light.intensity], lr=1e-2)
 
     return Trainer(
         components=TrainerComponents(
@@ -81,7 +82,7 @@ def make_trainer(
                 trajectory_model=model,
                 solver_config=SolverConfig(method="euler"),
                 camera=Camera(),
-                flash_light=FlashLight(),
+                flash_light=flash_light,
                 renderer_pp=diffuse_cook_torrance,
                 unpack_fn=unpack_brdf_diffuse_cook_torrance,
                 total_channels=rendering.total_channels,

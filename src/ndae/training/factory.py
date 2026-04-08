@@ -41,7 +41,13 @@ def build_trainer(
     vgg_features = vgg_features or VGG19Features()
 
     def optimizer_factory() -> torch.optim.Optimizer:
-        return torch.optim.Adam(system.trajectory_model.parameters(), lr=config.train.lr)
+        return torch.optim.Adam(
+            [
+                *system.trajectory_model.parameters(),
+                system.flash_light.intensity,
+            ],
+            lr=config.train.lr,
+        )
 
     return Trainer(
         components=TrainerComponents(

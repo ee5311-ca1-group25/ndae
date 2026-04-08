@@ -1,5 +1,5 @@
 experiment:
-  name: full_clay_solidifying
+  name: full_clay_solidifying_1
   output_root: outputs
   seed: 42
 
@@ -7,7 +7,7 @@ data:
   root: data_local/svbrdf_full
   exemplar: clay_solidifying
   image_size: 256
-  crop_size: 128
+  crop_size: 256
   n_frames: 100
   t_I: -2.0
   t_S: 0.0
@@ -30,12 +30,12 @@ rendering:
 
 train:
   batch_size: 1
-  lr: 0.0005
+  lr: 0.00005
   dry_run: false
-  n_iter: 121
-  n_init_iter: 8
+  n_iter: 3000
+  n_init_iter: 400
   log_every: 1
-  checkpoint_every: 1
+  checkpoint_every: 120
   sample_every: 1
-  sample_size: 128
+  sample_size: 256
   resume_from: null

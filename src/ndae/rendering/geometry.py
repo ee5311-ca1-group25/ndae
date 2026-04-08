@@ -19,7 +19,7 @@ class Camera:
 
 @dataclass(slots=True)
 class FlashLight:
-    intensity: float = 0.0
+    intensity: torch.Tensor | float = 0.0
     xy_position: tuple[float, float] = (0.0, 0.0)
 
 

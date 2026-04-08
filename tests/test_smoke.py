@@ -232,10 +232,83 @@ train:
     assert exit_code == 0
     workspace = tmp_path / "checkpoint_smoke"
     latest = workspace / "checkpoints" / "latest"
+    assert (latest / "flashlight.pt").is_file()
     assert (latest / "model.pt").is_file()
     assert (latest / "optimizer.pt").is_file()
     assert (latest / "trainer_state.pt").is_file()
     assert (latest / "meta.json").is_file()
+
+
+def test_train_cli_saves_local_checkpoint_after_misaligned_stage_switch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(train_cli, "VGG19Features", DummyFeatures)
+
+    data_root = tmp_path / "data_root"
+    exemplar_dir = data_root / "example"
+    write_image(exemplar_dir / "frame_0000.png", size=(24, 24), color=(20, 40, 60))
+    write_image(exemplar_dir / "frame_0001.png", size=(24, 24), color=(60, 80, 100))
+
+    config_path = tmp_path / "local_checkpoint_train.yaml"
+    config_path.write_text(
+        f"""
+experiment:
+  name: local_checkpoint_smoke
+  output_root: {tmp_path}
+  seed: 7
+
+data:
+  root: {data_root}
+  exemplar: example
+  image_size: 16
+  crop_size: 8
+  n_frames: 2
+  t_I: -2.0
+  t_S: 0.0
+  t_E: 2.0
+
+model:
+  dim: 8
+  solver: euler
+
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position: [0.0, 0.0]
+  height_scale: 1.0
+  gamma: 2.2
+
+train:
+  batch_size: 1
+  lr: 0.001
+  dry_run: false
+  n_iter: 7
+  n_init_iter: 1
+  log_every: 1
+  checkpoint_every: 6
+  sample_every: 1
+  sample_size: 8
+  resume_from: null
+""".strip(),
+        encoding="utf-8",
+    )
+
+    exit_code = run_train_cli(["--config", str(config_path)])
+
+    assert exit_code == 0
+
+    workspace = tmp_path / "local_checkpoint_smoke"
+    latest = workspace / "checkpoints" / "latest"
+    assert latest.is_dir()
+
+    meta_text = (latest / "meta.json").read_text(encoding="utf-8")
+    assert '"step": 7' in meta_text
+    assert '"stage": "local"' in meta_text
 
 
 def test_train_checkpoint_sample_closes_loop_on_toy_setup(

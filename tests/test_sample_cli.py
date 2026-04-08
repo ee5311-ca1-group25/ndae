@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 from ndae.cli.sample import run_sample_cli
 from ndae.training import save_checkpoint
@@ -72,3 +73,11 @@ def test_sample_cli_accepts_explicit_output_dir(tmp_path: Path) -> None:
     assert exit_code == 0
     assert output_dir.is_dir()
     assert len(list(output_dir.glob("frames_*.png"))) == 2
+
+
+def test_sample_cli_requires_flashlight_checkpoint_state(tmp_path: Path) -> None:
+    _, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2, sample_size=10)
+    (checkpoint_dir / "flashlight.pt").unlink()
+
+    with pytest.raises(FileNotFoundError, match="flashlight state"):
+        run_sample_cli(["--checkpoint", str(checkpoint_dir)])

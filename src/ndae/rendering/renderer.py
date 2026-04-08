@@ -114,13 +114,24 @@ def render_svbrdf(
         device=device,
     ).view(3, 1, 1)
     distance = (light_pos - positions).norm(dim=0, keepdim=True)
-    light_intensity = torch.exp(torch.tensor(flash_light.intensity, dtype=dtype, device=device))
+    light_intensity = torch.exp(_scalar_to_tensor(flash_light.intensity, dtype=dtype, device=device))
     irradiance = light_intensity * light_decay(distance)
     rendered = reflectance * irradiance.unsqueeze(0)
 
     invalid = (local_wi.narrow(-3, 2, 1) < 0.0) | (local_wo.narrow(-3, 2, 1) < 0.0)
     rendered = torch.where(invalid, torch.zeros_like(rendered), rendered)
     return rendered.squeeze(0) if squeeze else rendered
+
+
+def _scalar_to_tensor(
+    value: torch.Tensor | float,
+    *,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> torch.Tensor:
+    if isinstance(value, torch.Tensor):
+        return value.to(device=device, dtype=dtype)
+    return torch.tensor(value, dtype=dtype, device=device)
 
 __all__ = [
     "EPSILON",

@@ -13,3 +13,5 @@ wheels/
 data_local/
 
 .playwright-cli/
+
+/outputs/*

@@ -200,14 +200,38 @@ def test_full_clay_config_loads_without_dataset_validation() -> None:
         validate_dataset=False,
     )
 
-    assert config.experiment.name == "full_clay_solidifying"
+    assert config.experiment.name == "full_clay_solidifying_1"
     assert config.data.root == "data_local/svbrdf_full"
     assert config.data.exemplar == "clay_solidifying"
     assert config.data.n_frames == 100
     assert config.train.dry_run is False
-    assert config.train.n_iter == 121
-    assert config.train.n_init_iter == 8
-    assert config.train.sample_size == 128
+    assert config.train.n_iter == 3000
+    assert config.train.n_init_iter == 400
+    assert config.train.log_every == 1
+    assert config.train.checkpoint_every == 120
+    assert config.train.sample_size == 256
+
+
+def test_full_clay_official_like_config_loads_without_dataset_validation() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    config = load_config(
+        project_root / "configs" / "full_clay_official_like.yaml",
+        validate_dataset=False,
+    )
+
+    assert config.experiment.name == "full_clay_solidifying_official_like"
+    assert config.data.root == "data_local/svbrdf_full"
+    assert config.data.exemplar == "clay_solidifying"
+    assert config.data.crop_size == 128
+    assert config.data.n_frames == 100
+    assert config.train.dry_run is False
+    assert config.train.lr == 0.0005
+    assert config.train.n_iter == 60000
+    assert config.train.n_init_iter == 20000
+    assert config.train.log_every == 1
+    assert config.train.checkpoint_every == 500
+    assert config.train.sample_every == 500
+    assert config.train.sample_size == 256
 
 
 def test_load_config_supports_default_rendering_block(tmp_path: Path) -> None:

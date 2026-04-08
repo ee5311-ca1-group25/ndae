@@ -60,7 +60,7 @@ def run_sample_cli(argv: Sequence[str] | None = None) -> int:
         parser.error("--sample-size must be greater than 0")
 
     system = build_svbrdf_system(config)
-    load_sample_checkpoint(checkpoint_dir, system.trajectory_model)
+    load_sample_checkpoint(checkpoint_dir, system.trajectory_model, system.flash_light)
     system.trajectory_model.eval()
 
     generator = torch.Generator().manual_seed(config.experiment.seed)

@@ -123,9 +123,10 @@ def make_trainer(
     )
     schedule = RefreshSchedule(stage_config, generator=generator)
     renderer_pp, unpack_fn = resolve_renderer_runtime(config)
+    flash_light = FlashLight(intensity=torch.nn.Parameter(torch.tensor(0.0)))
 
     def optimizer_factory() -> torch.optim.Optimizer:
-        return torch.optim.Adam(model.parameters(), lr=config.train.lr)
+        return torch.optim.Adam([*model.parameters(), flash_light.intensity], lr=config.train.lr)
 
     return Trainer(
         components=TrainerComponents(
@@ -133,7 +134,7 @@ def make_trainer(
                 trajectory_model=model,
                 solver_config=SolverConfig(method="euler"),
                 camera=Camera(),
-                flash_light=FlashLight(),
+                flash_light=flash_light,
                 renderer_pp=renderer_pp,
                 unpack_fn=unpack_fn,
                 total_channels=config.rendering.total_channels,

@@ -10,6 +10,7 @@ def test_plot_metrics_script_writes_png(tmp_path: Path) -> None:
     payloads = [
         {
             "global_step": 1,
+            "cycle_step": 0,
             "loss_total": 1.25,
             "loss_init": 1.00,
             "loss_local": 0.00,
@@ -17,6 +18,7 @@ def test_plot_metrics_script_writes_png(tmp_path: Path) -> None:
         },
         {
             "global_step": 2,
+            "cycle_step": 1,
             "loss_total": 0.90,
             "loss_init": 0.00,
             "loss_local": 0.70,
@@ -24,6 +26,7 @@ def test_plot_metrics_script_writes_png(tmp_path: Path) -> None:
         },
         {
             "global_step": 3,
+            "cycle_step": 0,
             "loss_total": 0.75,
             "loss_init": 0.00,
             "loss_local": 0.55,
@@ -43,6 +46,8 @@ def test_plot_metrics_script_writes_png(tmp_path: Path) -> None:
             str(metrics_path),
             "--output",
             str(output_path),
+            "--refresh-rate",
+            "2",
         ],
         cwd=project_root,
         capture_output=True,
@@ -56,3 +61,4 @@ def test_plot_metrics_script_writes_png(tmp_path: Path) -> None:
     assert "Rendered loss plot." in result.stdout
     assert str(metrics_path) in result.stdout
     assert str(output_path) in result.stdout
+    assert "refresh_rate: 2" in result.stdout

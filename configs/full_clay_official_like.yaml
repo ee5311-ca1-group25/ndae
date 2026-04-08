@@ -1,0 +1,57 @@
+# Closest match to the official JAX svBRDF training defaults, within the
+# constraints of this PyTorch reimplementation.
+#
+# Official settings that are approximated here:
+# - 60,000 total iterations
+# - 20,000 init iterations
+# - lr = 5e-4
+# - 256x256 exemplar frames with 128x128 random training crops
+# - 256x256 sampling size
+# - roughly 500-step evaluation / checkpoint cadence
+#
+# Official behaviors that are NOT currently configurable in this repo:
+# - refresh_rate = 2 during init, then switch to 6 afterwards
+# - reduce-on-plateau LR schedule with 2500-step patience
+# - multi-crop / shuffle loss estimation per iteration
+
+experiment:
+  name: full_clay_solidifying_official_like
+  output_root: outputs
+  seed: 42
+
+data:
+  root: data_local/svbrdf_full
+  exemplar: clay_solidifying
+  image_size: 256
+  crop_size: 128
+  n_frames: 100
+  t_I: -2.0
+  t_S: 0.0
+  t_E: 10.0
+
+model:
+  dim: 64
+  solver: heun
+
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position: [0.0, 0.0]
+  height_scale: 1.0
+  gamma: 2.2
+
+train:
+  batch_size: 1
+  lr: 0.0005
+  dry_run: false
+  n_iter: 60000
+  n_init_iter: 20000
+  log_every: 1
+  checkpoint_every: 500
+  sample_every: 500
+  sample_size: 256
+  resume_from: null
