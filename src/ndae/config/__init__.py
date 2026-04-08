@@ -9,6 +9,10 @@ from .schema import (
     NDAEConfig,
     RenderingConfig,
     TrainConfig,
+    TrainLossConfig,
+    TrainRuntimeConfig,
+    TrainSchedulerConfig,
+    TrainStageConfig,
 )
 from .validation import validate_config
 
@@ -20,6 +24,10 @@ __all__ = [
     "NDAEConfig",
     "RenderingConfig",
     "TrainConfig",
+    "TrainRuntimeConfig",
+    "TrainStageConfig",
+    "TrainLossConfig",
+    "TrainSchedulerConfig",
     "load_config",
     "to_dict",
     "validate_config",

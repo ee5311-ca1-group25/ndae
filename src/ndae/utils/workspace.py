@@ -45,9 +45,9 @@ def format_run_summary(config: NDAEConfig, workspace: Path) -> str:
             f"rendering.n_normal_channels: {config.rendering.n_normal_channels}",
             f"rendering.n_aug_channels: {config.rendering.n_aug_channels}",
             f"rendering.total_channels: {config.rendering.total_channels}",
-            f"train.batch_size: {config.train.batch_size}",
-            f"train.lr: {config.train.lr}",
-            f"train.dry_run: {config.train.dry_run}",
+            f"train.runtime.batch_size: {config.train.runtime.batch_size}",
+            f"train.runtime.lr: {config.train.runtime.lr}",
+            f"train.runtime.dry_run: {config.train.runtime.dry_run}",
             f"workspace: {workspace}",
         ]
     )

@@ -115,7 +115,6 @@ data:
   image_size: 16
   crop_size: 8
   n_frames: 2
-  t_I: -2.0
   t_S: 0.0
   t_E: 2.0
 
@@ -135,16 +134,18 @@ rendering:
   gamma: 2.2
 
 train:
-  batch_size: 1
-  lr: 0.001
-  dry_run: false
-  n_iter: 2
-  n_init_iter: 1
-  log_every: 1
-  checkpoint_every: 1
-  sample_every: 1
-  sample_size: 8
-  resume_from: null
+  runtime:
+    batch_size: 1
+    lr: 0.001
+    dry_run: false
+    n_iter: 2
+    log_every: 1
+    checkpoint_every: 1
+    resume_from: null
+  stage:
+    n_init_iter: 1
+  loss: {{}}
+  scheduler: {{}}
 """.strip(),
         encoding="utf-8",
     )
@@ -193,7 +194,6 @@ data:
   image_size: 16
   crop_size: 8
   n_frames: 2
-  t_I: -2.0
   t_S: 0.0
   t_E: 2.0
 
@@ -213,16 +213,18 @@ rendering:
   gamma: 2.2
 
 train:
-  batch_size: 1
-  lr: 0.001
-  dry_run: false
-  n_iter: 7
-  n_init_iter: 1
-  log_every: 1
-  checkpoint_every: 1
-  sample_every: 1
-  sample_size: 8
-  resume_from: null
+  runtime:
+    batch_size: 1
+    lr: 0.001
+    dry_run: false
+    n_iter: 7
+    log_every: 1
+    checkpoint_every: 1
+    resume_from: null
+  stage:
+    n_init_iter: 1
+  loss: {{}}
+  scheduler: {{}}
 """.strip(),
         encoding="utf-8",
     )
@@ -264,7 +266,6 @@ data:
   image_size: 16
   crop_size: 8
   n_frames: 2
-  t_I: -2.0
   t_S: 0.0
   t_E: 2.0
 
@@ -284,16 +285,18 @@ rendering:
   gamma: 2.2
 
 train:
-  batch_size: 1
-  lr: 0.001
-  dry_run: false
-  n_iter: 7
-  n_init_iter: 1
-  log_every: 1
-  checkpoint_every: 6
-  sample_every: 1
-  sample_size: 8
-  resume_from: null
+  runtime:
+    batch_size: 1
+    lr: 0.001
+    dry_run: false
+    n_iter: 7
+    log_every: 1
+    checkpoint_every: 6
+    resume_from: null
+  stage:
+    n_init_iter: 1
+  loss: {{}}
+  scheduler: {{}}
 """.strip(),
         encoding="utf-8",
     )
@@ -338,7 +341,6 @@ data:
   image_size: 16
   crop_size: 8
   n_frames: 3
-  t_I: -2.0
   t_S: 0.0
   t_E: 2.0
 
@@ -358,16 +360,18 @@ rendering:
   gamma: 2.2
 
 train:
-  batch_size: 1
-  lr: 0.001
-  dry_run: false
-  n_iter: 7
-  n_init_iter: 1
-  log_every: 1
-  checkpoint_every: 1
-  sample_every: 1
-  sample_size: 10
-  resume_from: null
+  runtime:
+    batch_size: 1
+    lr: 0.001
+    dry_run: false
+    n_iter: 7
+    log_every: 1
+    checkpoint_every: 1
+    resume_from: null
+  stage:
+    n_init_iter: 1
+  loss: {{}}
+  scheduler: {{}}
 """.strip(),
         encoding="utf-8",
     )
@@ -381,7 +385,7 @@ train:
     train_output = capsys.readouterr().out
     assert "Training completed." in train_output
 
-    assert run_sample_cli(["--checkpoint", str(latest)]) == 0
+    assert run_sample_cli(["--checkpoint", str(latest), "--sample-size", "10"]) == 0
 
     output_dir = workspace / "samples" / "latest"
     frame_paths = sorted(output_dir.glob("frames_*.png"))
@@ -428,7 +432,6 @@ data:
   image_size: 16
   crop_size: 8
   n_frames: 2
-  t_I: -2.0
   t_S: 0.0
   t_E: 2.0
 
@@ -448,16 +451,18 @@ rendering:
   gamma: 2.2
 
 train:
-  batch_size: 1
-  lr: 0.001
-  dry_run: false
-  n_iter: 7
-  n_init_iter: 1
-  log_every: 1
-  checkpoint_every: 1
-  sample_every: 1
-  sample_size: 8
-  resume_from: null
+  runtime:
+    batch_size: 1
+    lr: 0.001
+    dry_run: false
+    n_iter: 7
+    log_every: 1
+    checkpoint_every: 1
+    resume_from: null
+  stage:
+    n_init_iter: 1
+  loss: {{}}
+  scheduler: {{}}
 """.strip(),
         encoding="utf-8",
     )
@@ -482,7 +487,6 @@ data:
   image_size: 16
   crop_size: 8
   n_frames: 2
-  t_I: -2.0
   t_S: 0.0
   t_E: 2.0
 
@@ -502,16 +506,18 @@ rendering:
   gamma: 2.2
 
 train:
-  batch_size: 1
-  lr: 0.001
-  dry_run: false
-  n_iter: 1
-  n_init_iter: 1
-  log_every: 1
-  checkpoint_every: 1
-  sample_every: 1
-  sample_size: 8
-  resume_from: {workspace / "checkpoints" / "latest"}
+  runtime:
+    batch_size: 1
+    lr: 0.001
+    dry_run: false
+    n_iter: 1
+    log_every: 1
+    checkpoint_every: 1
+    resume_from: {workspace / "checkpoints" / "latest"}
+  stage:
+    n_init_iter: 1
+  loss: {{}}
+  scheduler: {{}}
 """.strip(),
         encoding="utf-8",
     )

@@ -11,6 +11,10 @@ from ndae.config import (
     NDAEConfig,
     RenderingConfig,
     TrainConfig,
+    TrainLossConfig,
+    TrainRuntimeConfig,
+    TrainSchedulerConfig,
+    TrainStageConfig,
 )
 from ndae.data import Timeline
 from ndae.models import NDAEUNet, ODEFunction, TrajectoryModel
@@ -46,13 +50,23 @@ def make_config(
     image_size: int = 16,
     crop_size: int = 8,
     n_frames: int = 4,
+    t_S: float = 0.0,
+    t_E: float = 2.0,
     dry_run: bool = False,
     n_iter: int = 3,
     n_init_iter: int = 1,
     log_every: int = 1,
     checkpoint_every: int = 1,
-    sample_every: int = 1,
-    sample_size: int = 12,
+    loss_type: str = "SW",
+    refresh_rate_init: int = 2,
+    refresh_rate_local: int = 6,
+    eval_every: int = 500,
+    n_loss_crops: int = 32,
+    overflow_weight: float = 100.0,
+    init_height_weight: float = 1.0,
+    scheduler_factor: float = 0.5,
+    scheduler_patience_evals: int = 5,
+    scheduler_min_lr: float = 1e-4,
     resume_from: str | None = None,
 ) -> NDAEConfig:
     renderer_spec = select_renderer("diffuse_cook_torrance")
@@ -64,9 +78,8 @@ def make_config(
             image_size=image_size,
             crop_size=crop_size,
             n_frames=n_frames,
-            t_I=-2.0,
-            t_S=0.0,
-            t_E=2.0,
+            t_S=t_S,
+            t_E=t_E,
         ),
         model=ModelConfig(dim=8, solver="euler"),
         rendering=RenderingConfig(
@@ -74,16 +87,32 @@ def make_config(
             n_brdf_channels=renderer_spec.n_brdf_channels,
         ),
         train=TrainConfig(
-            batch_size=1,
-            lr=1e-2,
-            dry_run=dry_run,
-            n_iter=n_iter,
-            n_init_iter=n_init_iter,
-            log_every=log_every,
-            checkpoint_every=checkpoint_every,
-            sample_every=sample_every,
-            sample_size=sample_size,
-            resume_from=resume_from,
+            runtime=TrainRuntimeConfig(
+                batch_size=1,
+                lr=1e-2,
+                dry_run=dry_run,
+                n_iter=n_iter,
+                log_every=log_every,
+                checkpoint_every=checkpoint_every,
+                resume_from=resume_from,
+            ),
+            stage=TrainStageConfig(
+                n_init_iter=n_init_iter,
+                refresh_rate_init=refresh_rate_init,
+                refresh_rate_local=refresh_rate_local,
+            ),
+            loss=TrainLossConfig(
+                loss_type=loss_type,
+                n_loss_crops=n_loss_crops,
+                overflow_weight=overflow_weight,
+                init_height_weight=init_height_weight,
+            ),
+            scheduler=TrainSchedulerConfig(
+                eval_every=eval_every,
+                scheduler_factor=scheduler_factor,
+                scheduler_patience_evals=scheduler_patience_evals,
+                scheduler_min_lr=scheduler_min_lr,
+            ),
         ),
     )
 
@@ -115,18 +144,30 @@ def make_trainer(
         config.data.image_size,
         generator=torch.Generator().manual_seed(11),
     )
-    stage_config = StageConfig(
+    init_stage_config = StageConfig(
         t_init=timeline.t_I,
         t_start=timeline.t_S,
         t_end=timeline.t_E,
         refresh_rate=refresh_rate,
     )
-    schedule = RefreshSchedule(stage_config, generator=generator)
+    local_stage_config = StageConfig(
+        t_init=timeline.t_I,
+        t_start=timeline.t_S,
+        t_end=timeline.t_E,
+        refresh_rate=refresh_rate,
+    )
+    schedule = RefreshSchedule(
+        init_stage_config if config.train.stage.n_init_iter > 0 else local_stage_config,
+        generator=generator,
+    )
     renderer_pp, unpack_fn = resolve_renderer_runtime(config)
     flash_light = FlashLight(intensity=torch.nn.Parameter(torch.tensor(0.0)))
 
     def optimizer_factory() -> torch.optim.Optimizer:
-        return torch.optim.Adam([*model.parameters(), flash_light.intensity], lr=config.train.lr)
+        return torch.optim.Adam(
+            [*model.parameters(), flash_light.intensity],
+            lr=config.train.runtime.lr,
+        )
 
     return Trainer(
         components=TrainerComponents(
@@ -145,18 +186,19 @@ def make_trainer(
             ),
             optimizer_factory=optimizer_factory,
             schedule=schedule,
-            stage_config=stage_config,
+            init_stage_config=init_stage_config,
+            local_stage_config=local_stage_config,
             vgg_features=DummyFeatures(),
         ),
         config=TrainerConfig(
             exemplar_frames=exemplar_frames,
             timeline=timeline,
             crop_size=config.data.crop_size,
-            batch_size=config.train.batch_size,
+            batch_size=config.train.runtime.batch_size,
             workspace=workspace,
-            n_iter=config.train.n_iter,
-            n_init_iter=config.train.n_init_iter,
-            log_every=config.train.log_every,
+            n_iter=config.train.runtime.n_iter,
+            n_init_iter=config.train.stage.n_init_iter,
+            log_every=config.train.runtime.log_every,
             generator=generator,
         ),
     )

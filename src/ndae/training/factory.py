@@ -32,12 +32,22 @@ def build_trainer(
         base_dir=dataset_base_dir or Path.cwd(),
     )
     timeline = Timeline.from_config(config.data)
-    stage_config = StageConfig(
+    init_stage_config = StageConfig(
         t_init=config.data.t_I,
         t_start=config.data.t_S,
         t_end=config.data.t_E,
+        refresh_rate=config.train.stage.refresh_rate_init,
     )
-    schedule = RefreshSchedule(stage_config, generator=generator)
+    local_stage_config = StageConfig(
+        t_init=config.data.t_I,
+        t_start=config.data.t_S,
+        t_end=config.data.t_E,
+        refresh_rate=config.train.stage.refresh_rate_local,
+    )
+    initial_stage_config = (
+        init_stage_config if config.train.stage.n_init_iter > 0 else local_stage_config
+    )
+    schedule = RefreshSchedule(initial_stage_config, generator=generator)
     vgg_features = vgg_features or VGG19Features()
 
     def optimizer_factory() -> torch.optim.Optimizer:
@@ -46,7 +56,7 @@ def build_trainer(
                 *system.trajectory_model.parameters(),
                 system.flash_light.intensity,
             ],
-            lr=config.train.lr,
+            lr=config.train.runtime.lr,
         )
 
     return Trainer(
@@ -54,18 +64,19 @@ def build_trainer(
             system=system,
             optimizer_factory=optimizer_factory,
             schedule=schedule,
-            stage_config=stage_config,
+            init_stage_config=init_stage_config,
+            local_stage_config=local_stage_config,
             vgg_features=vgg_features,
         ),
         config=TrainerConfig(
             exemplar_frames=dataset.frames,
             timeline=timeline,
             crop_size=config.data.crop_size,
-            batch_size=config.train.batch_size,
+            batch_size=config.train.runtime.batch_size,
             workspace=workspace,
-            n_iter=config.train.n_iter,
-            n_init_iter=config.train.n_init_iter,
-            log_every=config.train.log_every,
+            n_iter=config.train.runtime.n_iter,
+            n_init_iter=config.train.stage.n_init_iter,
+            log_every=config.train.runtime.log_every,
             generator=generator,
         ),
     )

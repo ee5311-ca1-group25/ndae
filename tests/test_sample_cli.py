@@ -14,7 +14,6 @@ def _create_sample_checkpoint(
     tmp_path: Path,
     *,
     n_frames: int = 3,
-    sample_size: int = 12,
 ) -> tuple[Path, Path]:
     workspace = tmp_path / "sample_workspace"
     workspace.mkdir()
@@ -22,7 +21,6 @@ def _create_sample_checkpoint(
         output_root=str(tmp_path),
         name="sample_workspace",
         n_frames=n_frames,
-        sample_size=sample_size,
         n_init_iter=0,
     )
     save_resolved_config(config, workspace)
@@ -36,7 +34,7 @@ def _create_sample_checkpoint(
 def test_sample_cli_writes_png_sequence_from_checkpoint(tmp_path: Path) -> None:
     workspace, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=3)
 
-    exit_code = run_sample_cli(["--checkpoint", str(checkpoint_dir)])
+    exit_code = run_sample_cli(["--checkpoint", str(checkpoint_dir), "--sample-size", "12"])
 
     assert exit_code == 0
     output_dir = workspace / "samples" / checkpoint_dir.name
@@ -48,17 +46,24 @@ def test_sample_cli_writes_png_sequence_from_checkpoint(tmp_path: Path) -> None:
     ]
 
 
-def test_sample_cli_uses_config_default_sample_size(tmp_path: Path) -> None:
-    workspace, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2, sample_size=14)
+def test_sample_cli_requires_explicit_sample_size(tmp_path: Path) -> None:
+    _, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2)
 
-    run_sample_cli(["--checkpoint", str(checkpoint_dir)])
+    with pytest.raises(SystemExit, match="2"):
+        run_sample_cli(["--checkpoint", str(checkpoint_dir)])
+
+
+def test_sample_cli_uses_explicit_sample_size(tmp_path: Path) -> None:
+    workspace, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2)
+
+    run_sample_cli(["--checkpoint", str(checkpoint_dir), "--sample-size", "14"])
 
     with Image.open(workspace / "samples" / checkpoint_dir.name / "frames_0000.png") as image:
         assert image.size == (14, 14)
 
 
 def test_sample_cli_accepts_explicit_output_dir(tmp_path: Path) -> None:
-    _, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2, sample_size=10)
+    _, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2)
     output_dir = tmp_path / "custom_samples"
 
     exit_code = run_sample_cli(
@@ -67,6 +72,8 @@ def test_sample_cli_accepts_explicit_output_dir(tmp_path: Path) -> None:
             str(checkpoint_dir),
             "--output-dir",
             str(output_dir),
+            "--sample-size",
+            "10",
         ]
     )
 
@@ -76,8 +83,8 @@ def test_sample_cli_accepts_explicit_output_dir(tmp_path: Path) -> None:
 
 
 def test_sample_cli_requires_flashlight_checkpoint_state(tmp_path: Path) -> None:
-    _, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2, sample_size=10)
+    _, checkpoint_dir = _create_sample_checkpoint(tmp_path, n_frames=2)
     (checkpoint_dir / "flashlight.pt").unlink()
 
     with pytest.raises(FileNotFoundError, match="flashlight state"):
-        run_sample_cli(["--checkpoint", str(checkpoint_dir)])
+        run_sample_cli(["--checkpoint", str(checkpoint_dir), "--sample-size", "10"])

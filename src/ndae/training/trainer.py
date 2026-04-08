@@ -36,7 +36,8 @@ class TrainerComponents:
     system: SVBRDFSystem
     optimizer_factory: Callable[[], torch.optim.Optimizer]
     schedule: RefreshSchedule
-    stage_config: StageConfig
+    init_stage_config: StageConfig
+    local_stage_config: StageConfig
     vgg_features: nn.Module
 
 
@@ -70,7 +71,8 @@ class Trainer:
         self.optimizer_factory = components.optimizer_factory
         self.optimizer = self.optimizer_factory()
         self.schedule = components.schedule
-        self.stage_config = components.stage_config
+        self.init_stage_config = components.init_stage_config
+        self.local_stage_config = components.local_stage_config
         self.vgg_features = components.vgg_features
         self.timeline = config.timeline
         self.crop_size = config.crop_size
@@ -87,10 +89,12 @@ class Trainer:
         self.metrics_path = self.workspace / "metrics.jsonl"
         if not self.metrics_path.exists():
             self.metrics_path.write_text("", encoding="utf-8")
+        initial_stage = "init" if self.n_init_iter > 0 else "local"
+        initial_stage_config = self._stage_config_for(initial_stage)
         self.state = TrainerState(
             global_step=0,
-            stage="init" if self.n_init_iter > 0 else "local",
-            carry_time=self.stage_config.t_start,
+            stage=initial_stage,
+            carry_time=initial_stage_config.t_start,
             carry_state=None,
             cycle_step=0,
         )
@@ -154,7 +158,7 @@ class Trainer:
         self.state.carry_time = window.t1
         self.state.global_step += 1
         self.state.stage = current_stage
-        self.state.cycle_step = (cycle_step + 1) % self.stage_config.refresh_rate
+        self.state.cycle_step = (cycle_step + 1) % self._stage_config_for(current_stage).refresh_rate
 
         return {
             "global_step": self.state.global_step,
@@ -188,11 +192,16 @@ class Trainer:
 
     def _enter_local_stage(self) -> None:
         self.optimizer = self.optimizer_factory()
-        self.schedule = RefreshSchedule(self.stage_config, generator=self.generator)
+        self.schedule = RefreshSchedule(self.local_stage_config, generator=self.generator)
         self.state.stage = "local"
         self.state.carry_state = None
-        self.state.carry_time = self.stage_config.t_start
+        self.state.carry_time = self.local_stage_config.t_start
         self.state.cycle_step = 0
+
+    def _stage_config_for(self, stage: Literal["init", "local"]) -> StageConfig:
+        if stage == "init":
+            return self.init_stage_config
+        return self.local_stage_config
 
     def _resolve_initial_state(self, *, refresh: bool) -> torch.Tensor:
         if refresh:

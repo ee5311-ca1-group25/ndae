@@ -31,7 +31,6 @@ def validate_config(
     ensure_positive_int(config.data.image_size, "data.image_size")
     ensure_positive_int(config.data.crop_size, "data.crop_size")
     ensure_positive_int(config.data.n_frames, "data.n_frames")
-    ensure_float(config.data.t_I, "data.t_I")
     ensure_float(config.data.t_S, "data.t_S")
     ensure_float(config.data.t_E, "data.t_E")
     if not (config.data.t_I < config.data.t_S < config.data.t_E):
@@ -45,19 +44,56 @@ def validate_config(
     ensure_non_empty_string(config.model.solver, "model.solver")
     validate_rendering_config(config)
 
-    ensure_positive_int(config.train.batch_size, "train.batch_size")
-    ensure_positive_float(config.train.lr, "train.lr")
-    ensure_bool(config.train.dry_run, "train.dry_run")
-    ensure_positive_int(config.train.n_iter, "train.n_iter")
-    ensure_non_negative_int(config.train.n_init_iter, "train.n_init_iter")
-    if config.train.n_init_iter > config.train.n_iter:
-        raise ConfigError("train.n_init_iter must be less than or equal to train.n_iter")
-    ensure_positive_int(config.train.log_every, "train.log_every")
-    ensure_positive_int(config.train.checkpoint_every, "train.checkpoint_every")
-    ensure_positive_int(config.train.sample_every, "train.sample_every")
-    ensure_positive_int(config.train.sample_size, "train.sample_size")
-    if config.train.resume_from is not None:
-        ensure_non_empty_string(config.train.resume_from, "train.resume_from")
+    ensure_positive_int(config.train.runtime.batch_size, "train.runtime.batch_size")
+    ensure_positive_float(config.train.runtime.lr, "train.runtime.lr")
+    ensure_bool(config.train.runtime.dry_run, "train.runtime.dry_run")
+    ensure_positive_int(config.train.runtime.n_iter, "train.runtime.n_iter")
+    ensure_positive_int(config.train.runtime.log_every, "train.runtime.log_every")
+    ensure_positive_int(
+        config.train.runtime.checkpoint_every,
+        "train.runtime.checkpoint_every",
+    )
+    ensure_non_negative_int(config.train.stage.n_init_iter, "train.stage.n_init_iter")
+    if config.train.stage.n_init_iter > config.train.runtime.n_iter:
+        raise ConfigError(
+            "train.stage.n_init_iter must be less than or equal to train.runtime.n_iter"
+        )
+    ensure_non_empty_string(config.train.loss.loss_type, "train.loss.loss_type")
+    if config.train.loss.loss_type not in {"SW", "GRAM"}:
+        raise ConfigError("train.loss.loss_type must be one of: SW, GRAM")
+    ensure_positive_int(
+        config.train.stage.refresh_rate_init,
+        "train.stage.refresh_rate_init",
+    )
+    ensure_positive_int(
+        config.train.stage.refresh_rate_local,
+        "train.stage.refresh_rate_local",
+    )
+    if config.train.stage.refresh_rate_init < 2:
+        raise ConfigError("train.stage.refresh_rate_init must be greater than or equal to 2")
+    if config.train.stage.refresh_rate_local < 2:
+        raise ConfigError("train.stage.refresh_rate_local must be greater than or equal to 2")
+    ensure_positive_int(config.train.scheduler.eval_every, "train.scheduler.eval_every")
+    ensure_positive_int(config.train.loss.n_loss_crops, "train.loss.n_loss_crops")
+    ensure_non_negative_float(config.train.loss.overflow_weight, "train.loss.overflow_weight")
+    ensure_non_negative_float(
+        config.train.loss.init_height_weight,
+        "train.loss.init_height_weight",
+    )
+    ensure_float(config.train.scheduler.scheduler_factor, "train.scheduler.scheduler_factor")
+    if not 0.0 < float(config.train.scheduler.scheduler_factor) < 1.0:
+        raise ConfigError("train.scheduler.scheduler_factor must be between 0 and 1")
+    ensure_positive_int(
+        config.train.scheduler.scheduler_patience_evals,
+        "train.scheduler.scheduler_patience_evals",
+    )
+    ensure_positive_float(config.train.scheduler.scheduler_min_lr, "train.scheduler.scheduler_min_lr")
+    if float(config.train.scheduler.scheduler_min_lr) > float(config.train.runtime.lr):
+        raise ConfigError(
+            "train.scheduler.scheduler_min_lr must be less than or equal to train.runtime.lr"
+        )
+    if config.train.runtime.resume_from is not None:
+        ensure_non_empty_string(config.train.runtime.resume_from, "train.runtime.resume_from")
 
 
 def validate_rendering_config(config: NDAEConfig) -> None:
@@ -125,6 +161,12 @@ def ensure_positive_float(value: float, field_name: str) -> None:
 def ensure_float(value: float, field_name: str) -> None:
     if type(value) not in {int, float}:
         raise ConfigError(f"{field_name} must be a float")
+
+
+def ensure_non_negative_float(value: float, field_name: str) -> None:
+    ensure_float(value, field_name)
+    if float(value) < 0.0:
+        raise ConfigError(f"{field_name} must be greater than or equal to 0")
 
 
 def ensure_bool(value: bool, field_name: str) -> None:

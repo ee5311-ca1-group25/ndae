@@ -9,9 +9,9 @@
 # - 256x256 sampling size
 # - roughly 500-step evaluation / checkpoint cadence
 #
-# Official behaviors that are NOT currently configurable in this repo:
-# - refresh_rate = 2 during init, then switch to 6 afterwards
-# - reduce-on-plateau LR schedule with 2500-step patience
+# Official behaviors that are now represented in config, but not yet fully
+# implemented end-to-end in runtime semantics:
+# - reduce-on-plateau LR schedule driven by eval-time inference loss
 # - multi-crop / shuffle loss estimation per iteration
 
 experiment:
@@ -25,7 +25,6 @@ data:
   image_size: 256
   crop_size: 128
   n_frames: 100
-  t_I: -2.0
   t_S: 0.0
   t_E: 10.0
 
@@ -45,13 +44,25 @@ rendering:
   gamma: 2.2
 
 train:
-  batch_size: 1
-  lr: 0.0005
-  dry_run: false
-  n_iter: 60000
-  n_init_iter: 20000
-  log_every: 1
-  checkpoint_every: 500
-  sample_every: 500
-  sample_size: 256
-  resume_from: null
+  runtime:
+    batch_size: 1
+    lr: 0.0005
+    dry_run: false
+    n_iter: 60000
+    log_every: 1
+    checkpoint_every: 500
+    resume_from: null
+  stage:
+    n_init_iter: 20000
+    refresh_rate_init: 2
+    refresh_rate_local: 6
+  loss:
+    loss_type: SW
+    n_loss_crops: 32
+    overflow_weight: 100.0
+    init_height_weight: 1.0
+  scheduler:
+    eval_every: 500
+    scheduler_factor: 0.5
+    scheduler_patience_evals: 5
+    scheduler_min_lr: 0.0001

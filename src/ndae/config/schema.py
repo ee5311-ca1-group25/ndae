@@ -19,9 +19,13 @@ class DataConfig:
     image_size: int
     crop_size: int
     n_frames: int
-    t_I: float = -2.0
     t_S: float = 0.0
     t_E: float = 10.0
+
+    @property
+    def t_I(self) -> float:
+        duration = self.t_E - self.t_S
+        return self.t_S - 0.2 * duration
 
 
 @dataclass(slots=True)
@@ -49,17 +53,45 @@ class RenderingConfig:
 
 
 @dataclass(slots=True)
-class TrainConfig:
+class TrainRuntimeConfig:
     batch_size: int
     lr: float
     dry_run: bool
     n_iter: int
-    n_init_iter: int
     log_every: int
-    checkpoint_every: int
-    sample_every: int
-    sample_size: int
+    checkpoint_every: int = 1
     resume_from: str | None = None
+
+
+@dataclass(slots=True)
+class TrainStageConfig:
+    n_init_iter: int
+    refresh_rate_init: int = 2
+    refresh_rate_local: int = 6
+
+
+@dataclass(slots=True)
+class TrainLossConfig:
+    loss_type: str = "SW"
+    n_loss_crops: int = 32
+    overflow_weight: float = 100.0
+    init_height_weight: float = 1.0
+
+
+@dataclass(slots=True)
+class TrainSchedulerConfig:
+    eval_every: int = 500
+    scheduler_factor: float = 0.5
+    scheduler_patience_evals: int = 5
+    scheduler_min_lr: float = 1e-4
+
+
+@dataclass(slots=True)
+class TrainConfig:
+    runtime: TrainRuntimeConfig
+    stage: TrainStageConfig
+    loss: TrainLossConfig
+    scheduler: TrainSchedulerConfig
 
 
 @dataclass(slots=True)

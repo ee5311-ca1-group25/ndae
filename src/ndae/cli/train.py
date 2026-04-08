@@ -57,7 +57,7 @@ def run_train_cli(argv: Sequence[str] | None = None) -> int:
     save_resolved_config(config, workspace)
     print(format_run_summary(config, workspace))
 
-    if config.train.dry_run:
+    if config.train.runtime.dry_run:
         print("Dry run completed.")
         return 0
 
@@ -66,9 +66,9 @@ def run_train_cli(argv: Sequence[str] | None = None) -> int:
         workspace,
         vgg_features=VGG19Features(),
     )
-    if config.train.resume_from is not None:
-        load_resume_checkpoint(Path(config.train.resume_from), trainer)
-        print(f"Resumed from checkpoint: {Path(config.train.resume_from).resolve()}")
+    if config.train.runtime.resume_from is not None:
+        load_resume_checkpoint(Path(config.train.runtime.resume_from), trainer)
+        print(f"Resumed from checkpoint: {Path(config.train.runtime.resume_from).resolve()}")
     trainer.run(
         make_checkpoint_callback(
             config,
@@ -93,7 +93,10 @@ def apply_overrides(
     if output_root is not None:
         experiment = replace(experiment, output_root=output_root)
     if force_dry_run:
-        train = replace(train, dry_run=True)
+        train = replace(
+            train,
+            runtime=replace(train.runtime, dry_run=True),
+        )
 
     if experiment is config.experiment and train is config.train:
         return config
@@ -113,7 +116,10 @@ def make_checkpoint_callback(
         if trainer.state.cycle_step != 0:
             return
         nonlocal last_checkpoint_step
-        if trainer.state.global_step - last_checkpoint_step < config.train.checkpoint_every:
+        if (
+            trainer.state.global_step - last_checkpoint_step
+            < config.train.runtime.checkpoint_every
+        ):
             return
         save_checkpoint(workspace, trainer)
         last_checkpoint_step = trainer.state.global_step

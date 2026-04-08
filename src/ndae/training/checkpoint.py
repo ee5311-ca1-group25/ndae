@@ -108,7 +108,8 @@ def load_resume_checkpoint(checkpoint_dir: Path, trainer: Trainer) -> TrainerSta
         torch.load(resolved_dir / "optimizer.pt", map_location=trainer.device)
     )
     trainer.state = trainer_state
-    trainer.schedule = RefreshSchedule(trainer.stage_config, generator=trainer.generator)
+    stage_config = trainer.init_stage_config if trainer.state.stage == "init" else trainer.local_stage_config
+    trainer.schedule = RefreshSchedule(stage_config, generator=trainer.generator)
     return trainer.state
 
 

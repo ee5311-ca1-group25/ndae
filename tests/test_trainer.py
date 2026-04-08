@@ -64,13 +64,22 @@ def make_trainer(
         16,
         generator=torch.Generator().manual_seed(11),
     )
-    stage_config = StageConfig(
+    init_stage_config = StageConfig(
+        t_init=timeline.t_I,
+        t_start=timeline.t_S,
+        t_end=timeline.t_E,
+        refresh_rate=2,
+    )
+    local_stage_config = StageConfig(
         t_init=timeline.t_I,
         t_start=timeline.t_S,
         t_end=timeline.t_E,
         refresh_rate=3,
     )
-    schedule = RefreshSchedule(stage_config, generator=generator)
+    schedule = RefreshSchedule(
+        init_stage_config if n_init_iter > 0 else local_stage_config,
+        generator=generator,
+    )
     flash_light = FlashLight(intensity=torch.nn.Parameter(torch.tensor(0.0)))
 
     def optimizer_factory() -> torch.optim.Optimizer:
@@ -93,7 +102,8 @@ def make_trainer(
             ),
             optimizer_factory=optimizer_factory,
             schedule=schedule,
-            stage_config=stage_config,
+            init_stage_config=init_stage_config,
+            local_stage_config=local_stage_config,
             vgg_features=DummyFeatures(),
         ),
         config=TrainerConfig(
@@ -137,6 +147,13 @@ def test_trainer_switches_stage_after_n_init_iter(tmp_path: Path) -> None:
     assert trainer.state.stage == "local"
     assert trainer.state.global_step == 2
     assert trainer.state.cycle_step == 1
+
+
+def test_trainer_uses_distinct_init_and_local_stage_configs(tmp_path: Path) -> None:
+    trainer = make_trainer(tmp_path, n_init_iter=1)
+
+    assert trainer.init_stage_config.refresh_rate == 2
+    assert trainer.local_stage_config.refresh_rate == 3
 
 
 def test_trainer_detaches_and_advances_carry_state(tmp_path: Path) -> None:

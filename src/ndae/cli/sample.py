@@ -37,8 +37,8 @@ def build_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sample-size",
         type=int,
-        default=None,
-        help="Optional override for config.train.sample_size.",
+        required=True,
+        help="Output spatial resolution used for sample-time rollout.",
     )
     return parser
 
@@ -55,7 +55,7 @@ def run_sample_cli(argv: Sequence[str] | None = None) -> int:
         base_dir=workspace,
         validate_dataset=False,
     )
-    sample_size = args.sample_size if args.sample_size is not None else config.train.sample_size
+    sample_size = args.sample_size
     if sample_size <= 0:
         parser.error("--sample-size must be greater than 0")
 

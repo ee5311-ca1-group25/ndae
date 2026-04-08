@@ -15,6 +15,10 @@ from .schema import (
     NDAEConfig,
     RenderingConfig,
     TrainConfig,
+    TrainLossConfig,
+    TrainRuntimeConfig,
+    TrainSchedulerConfig,
+    TrainStageConfig,
 )
 
 
@@ -58,7 +62,7 @@ def build_data_config(payload: Mapping[str, Any]) -> DataConfig:
         payload,
         "data",
         {"root", "exemplar", "image_size", "crop_size", "n_frames"},
-        optional={"t_I", "t_S", "t_E"},
+        optional={"t_S", "t_E"},
     )
     return DataConfig(
         root=read_str(payload, "root", "data"),
@@ -66,7 +70,6 @@ def build_data_config(payload: Mapping[str, Any]) -> DataConfig:
         image_size=read_int(payload, "image_size", "data"),
         crop_size=read_int(payload, "crop_size", "data"),
         n_frames=read_int(payload, "n_frames", "data"),
-        t_I=read_optional_float(payload, "t_I", "data", default=-2.0),
         t_S=read_optional_float(payload, "t_S", "data", default=0.0),
         t_E=read_optional_float(payload, "t_E", "data", default=10.0),
     )
@@ -174,34 +177,176 @@ def build_train_config(payload: Mapping[str, Any]) -> TrainConfig:
     expect_keys(
         payload,
         "train",
+        {"runtime", "stage", "loss", "scheduler"},
+    )
+    runtime = build_train_runtime_config(
+        require_mapping(payload["runtime"], "train.runtime")
+    )
+    stage = build_train_stage_config(
+        require_mapping(payload["stage"], "train.stage")
+    )
+    loss = build_train_loss_config(
+        require_mapping(payload["loss"], "train.loss")
+    )
+    scheduler = build_train_scheduler_config(
+        require_mapping(payload["scheduler"], "train.scheduler")
+    )
+    return TrainConfig(
+        runtime=runtime,
+        stage=stage,
+        loss=loss,
+        scheduler=scheduler,
+    )
+
+
+def build_train_runtime_config(payload: Mapping[str, Any]) -> TrainRuntimeConfig:
+    defaults = TrainRuntimeConfig(
+        batch_size=1,
+        lr=5e-4,
+        dry_run=True,
+        n_iter=1,
+        log_every=1,
+    )
+    expect_keys(
+        payload,
+        "train.runtime",
         {
             "batch_size",
             "lr",
             "dry_run",
             "n_iter",
-            "n_init_iter",
             "log_every",
-            "checkpoint_every",
-            "sample_every",
-            "sample_size",
         },
-        optional={"resume_from"},
+        optional={
+            "checkpoint_every",
+            "resume_from",
+        },
     )
-    return TrainConfig(
-        batch_size=read_int(payload, "batch_size", "train"),
-        lr=read_float(payload, "lr", "train"),
-        dry_run=read_bool(payload, "dry_run", "train"),
-        n_iter=read_int(payload, "n_iter", "train"),
-        n_init_iter=read_int(payload, "n_init_iter", "train"),
-        log_every=read_int(payload, "log_every", "train"),
-        checkpoint_every=read_int(payload, "checkpoint_every", "train"),
-        sample_every=read_int(payload, "sample_every", "train"),
-        sample_size=read_int(payload, "sample_size", "train"),
+    return TrainRuntimeConfig(
+        batch_size=read_int(payload, "batch_size", "train.runtime"),
+        lr=read_float(payload, "lr", "train.runtime"),
+        dry_run=read_bool(payload, "dry_run", "train.runtime"),
+        n_iter=read_int(payload, "n_iter", "train.runtime"),
+        log_every=read_int(payload, "log_every", "train.runtime"),
+        checkpoint_every=read_optional_int(
+            payload,
+            "checkpoint_every",
+            "train.runtime",
+            default=defaults.checkpoint_every,
+        ),
         resume_from=read_optional_str(
             payload,
             "resume_from",
-            "train",
+            "train.runtime",
             default=None,
+        ),
+    )
+
+
+def build_train_stage_config(payload: Mapping[str, Any]) -> TrainStageConfig:
+    defaults = TrainStageConfig(n_init_iter=0)
+    expect_keys(
+        payload,
+        "train.stage",
+        {"n_init_iter"},
+        optional={"refresh_rate_init", "refresh_rate_local"},
+    )
+    return TrainStageConfig(
+        n_init_iter=read_int(payload, "n_init_iter", "train.stage"),
+        refresh_rate_init=read_optional_int(
+            payload,
+            "refresh_rate_init",
+            "train.stage",
+            default=defaults.refresh_rate_init,
+        ),
+        refresh_rate_local=read_optional_int(
+            payload,
+            "refresh_rate_local",
+            "train.stage",
+            default=defaults.refresh_rate_local,
+        ),
+    )
+
+
+def build_train_loss_config(payload: Mapping[str, Any]) -> TrainLossConfig:
+    defaults = TrainLossConfig()
+    expect_keys(
+        payload,
+        "train.loss",
+        set(),
+        optional={
+            "loss_type",
+            "n_loss_crops",
+            "overflow_weight",
+            "init_height_weight",
+        },
+    )
+    loss_type = read_optional_str(
+        payload,
+        "loss_type",
+        "train.loss",
+        default=defaults.loss_type,
+    ).upper()
+    return TrainLossConfig(
+        loss_type=loss_type,
+        n_loss_crops=read_optional_int(
+            payload,
+            "n_loss_crops",
+            "train.loss",
+            default=defaults.n_loss_crops,
+        ),
+        overflow_weight=read_optional_float(
+            payload,
+            "overflow_weight",
+            "train.loss",
+            default=defaults.overflow_weight,
+        ),
+        init_height_weight=read_optional_float(
+            payload,
+            "init_height_weight",
+            "train.loss",
+            default=defaults.init_height_weight,
+        ),
+    )
+
+
+def build_train_scheduler_config(payload: Mapping[str, Any]) -> TrainSchedulerConfig:
+    defaults = TrainSchedulerConfig()
+    expect_keys(
+        payload,
+        "train.scheduler",
+        set(),
+        optional={
+            "eval_every",
+            "scheduler_factor",
+            "scheduler_patience_evals",
+            "scheduler_min_lr",
+        },
+    )
+    return TrainSchedulerConfig(
+        eval_every=read_optional_int(
+            payload,
+            "eval_every",
+            "train.scheduler",
+            default=defaults.eval_every,
+        ),
+        scheduler_factor=read_optional_float(
+            payload,
+            "scheduler_factor",
+            "train.scheduler",
+            default=defaults.scheduler_factor,
+        ),
+        scheduler_patience_evals=read_optional_int(
+            payload,
+            "scheduler_patience_evals",
+            "train.scheduler",
+            default=defaults.scheduler_patience_evals,
+        ),
+        scheduler_min_lr=read_optional_float(
+            payload,
+            "scheduler_min_lr",
+            "train.scheduler",
+            default=defaults.scheduler_min_lr,
         ),
     )
 
