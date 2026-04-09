@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""Thin script entry point for training."""
+
+from __future__ import annotations
+
 from ndae.cli.train import run_train_cli
 
 

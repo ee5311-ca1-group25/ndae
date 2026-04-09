@@ -1,0 +1,110 @@
+"""Factory helpers for assembling the training runtime."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+
+from ndae.config import NDAEConfig
+from ndae.data import ExemplarDataset, Timeline
+from ndae.losses import VGG19Features
+
+from .schedule import RefreshSchedule, StageConfig
+from .system import build_svbrdf_system
+from .config import (
+    TrainerConfig,
+    TrainerLossConfig,
+    TrainerRuntimeConfig,
+    TrainerSchedulerConfig,
+    TrainerStageConfig,
+)
+from .trainer import Trainer, TrainerComponents
+
+
+def build_trainer(
+    config: NDAEConfig,
+    workspace: Path,
+    *,
+    dataset_base_dir: Path | None = None,
+    vgg_features: nn.Module | None = None,
+    generator: torch.Generator | None = None,
+) -> Trainer:
+    """Build a Trainer from repo-level config and runtime defaults."""
+    generator = generator or torch.Generator().manual_seed(config.experiment.seed)
+    system = build_svbrdf_system(config)
+    dataset = ExemplarDataset.from_config(
+        config.data,
+        base_dir=dataset_base_dir or Path.cwd(),
+    )
+    timeline = Timeline.from_config(config.data)
+    trainer_stage = TrainerStageConfig(
+        n_init_iter=config.train.stage.n_init_iter,
+        refresh_rate_init=config.train.stage.refresh_rate_init,
+        refresh_rate_local=config.train.stage.refresh_rate_local,
+    )
+    init_stage_config = StageConfig(
+        t_init=config.data.t_I,
+        t_start=config.data.t_S,
+        t_end=config.data.t_E,
+        refresh_rate=trainer_stage.refresh_rate_init,
+    )
+    local_stage_config = StageConfig(
+        t_init=config.data.t_I,
+        t_start=config.data.t_S,
+        t_end=config.data.t_E,
+        refresh_rate=trainer_stage.refresh_rate_local,
+    )
+    initial_stage_config = init_stage_config if trainer_stage.n_init_iter > 0 else local_stage_config
+    schedule = RefreshSchedule(initial_stage_config, generator=generator)
+    vgg_features = vgg_features or VGG19Features()
+
+    def optimizer_factory() -> torch.optim.Optimizer:
+        return torch.optim.Adam(
+            [
+                *system.trajectory_model.parameters(),
+                system.flash_light.intensity,
+            ],
+            lr=config.train.runtime.lr,
+        )
+
+    return Trainer(
+        components=TrainerComponents(
+            system=system,
+            optimizer_factory=optimizer_factory,
+            schedule=schedule,
+            init_stage_config=init_stage_config,
+            local_stage_config=local_stage_config,
+            vgg_features=vgg_features,
+        ),
+        config=TrainerConfig(
+            exemplar_frames=dataset.frames,
+            timeline=timeline,
+            crop_size=config.data.crop_size,
+            runtime=TrainerRuntimeConfig(
+                batch_size=config.train.runtime.batch_size,
+                workspace=workspace,
+                n_iter=config.train.runtime.n_iter,
+                log_every=config.train.runtime.log_every,
+                gamma=config.rendering.gamma,
+                generator=generator,
+            ),
+            stage=trainer_stage,
+            loss=TrainerLossConfig(
+                loss_type=config.train.loss.loss_type,
+                n_loss_crops=config.train.loss.n_loss_crops,
+                overflow_weight=config.train.loss.overflow_weight,
+                init_height_weight=config.train.loss.init_height_weight,
+            ),
+            scheduler=TrainerSchedulerConfig(
+                eval_every=config.train.scheduler.eval_every,
+                scheduler_factor=config.train.scheduler.scheduler_factor,
+                scheduler_patience_evals=config.train.scheduler.scheduler_patience_evals,
+                scheduler_min_lr=config.train.scheduler.scheduler_min_lr,
+            ),
+        ),
+    )
+
+
+__all__ = ["build_trainer"]

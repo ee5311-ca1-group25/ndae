@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Local datasets
+data_local/
+
+.playwright-cli/
+
+/outputs/*

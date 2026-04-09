@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ndae"
 version = "0.1.0"
@@ -7,6 +11,23 @@ requires-python = ">=3.11"
 dependencies = [
     "matplotlib>=3.10.8",
     "numpy>=2.4.4",
+    "pyyaml>=6.0.2",
+    "remotezip>=0.12.3",
     "torch>=2.11.0",
     "torchdiffeq>=0.2.5",
+    "torchvision>=0.22.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

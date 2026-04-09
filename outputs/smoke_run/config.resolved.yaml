@@ -1,0 +1,51 @@
+experiment:
+  name: smoke_run
+  output_root: outputs
+  seed: 42
+data:
+  root: data_local/svbrdf_mini
+  exemplar: clay_solidifying
+  image_size: 256
+  crop_size: 128
+  n_frames: 8
+  t_S: 0.0
+  t_E: 10.0
+model:
+  dim: 64
+  solver: heun
+rendering:
+  renderer_type: diffuse_cook_torrance
+  n_brdf_channels: 8
+  n_normal_channels: 1
+  n_aug_channels: 9
+  camera_fov: 50.0
+  camera_distance: 1.0
+  light_intensity: 0.0
+  light_xy_position:
+  - 0.0
+  - 0.0
+  height_scale: 1.0
+  gamma: 2.2
+train:
+  runtime:
+    batch_size: 1
+    lr: 0.0005
+    dry_run: true
+    n_iter: 2
+    log_every: 1
+    checkpoint_every: 1
+    resume_from: null
+  stage:
+    n_init_iter: 1
+    refresh_rate_init: 2
+    refresh_rate_local: 6
+  loss:
+    loss_type: SW
+    n_loss_crops: 32
+    overflow_weight: 100.0
+    init_height_weight: 1.0
+  scheduler:
+    eval_every: 500
+    scheduler_factor: 0.5
+    scheduler_patience_evals: 5
+    scheduler_min_lr: 0.0001
