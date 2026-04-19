@@ -38,50 +38,62 @@ def run_eval(trainer, *, iteration: int) -> dict[str, float | int | str]:
 def compute_inference_loss(trainer) -> float:
     from ..training.system import render_latent_state
 
-    height, width = trainer.exemplar_frames.shape[-2:]
-    z0 = torch.randn(
-        1,
-        trainer.system.total_channels,
-        height,
-        width,
-        generator=trainer.runtime.generator,
-        device=trainer.device,
-        dtype=trainer.dtype,
-    )
-    t_eval = torch.cat(
-        [
-            torch.tensor([trainer.timeline.t_I], device=trainer.device, dtype=trainer.dtype),
-            torch.linspace(
-                trainer.timeline.t_S,
-                trainer.timeline.t_E,
-                trainer.timeline.n_frames,
+    was_model_training = trainer.trajectory_model.training
+    was_vgg_training = trainer.vgg_features.training
+    trainer.trajectory_model.eval()
+    trainer.vgg_features.eval()
+
+    try:
+        with torch.inference_mode():
+            height, width = trainer.exemplar_frames.shape[-2:]
+            z0 = torch.randn(
+                1,
+                trainer.system.total_channels,
+                height,
+                width,
+                generator=trainer.runtime.generator,
                 device=trainer.device,
                 dtype=trainer.dtype,
-            ),
-        ]
-    )
-    states = trainer.trajectory_model(
-        z0,
-        t_eval,
-        method=trainer.system.solver_config.method,
-        rtol=trainer.system.solver_config.rtol,
-        atol=trainer.system.solver_config.atol,
-        **(trainer.system.solver_config.options or {}),
-    )
-    frame_losses: list[torch.Tensor] = []
-    for frame_index, state in enumerate(states[1:]):
-        rendered = render_latent_state(trainer.system, state)
-        target = trainer.exemplar_frames[frame_index].unsqueeze(0)
-        frame_losses.append(
-            local_loss(
-                trainer.vgg_features,
-                rendered,
-                target,
-                loss_type=trainer.loss_cfg.loss_type,
-                generator=trainer.runtime.generator,
             )
-        )
-    return float(torch.stack(frame_losses).mean().detach().item())
+            t_eval = torch.cat(
+                [
+                    torch.tensor([trainer.timeline.t_I], device=trainer.device, dtype=trainer.dtype),
+                    torch.linspace(
+                        trainer.timeline.t_S,
+                        trainer.timeline.t_E,
+                        trainer.timeline.n_frames,
+                        device=trainer.device,
+                        dtype=trainer.dtype,
+                    ),
+                ]
+            )
+            states = trainer.trajectory_model(
+                z0,
+                t_eval,
+                method=trainer.system.solver_config.method,
+                rtol=trainer.system.solver_config.rtol,
+                atol=trainer.system.solver_config.atol,
+                **(trainer.system.solver_config.options or {}),
+            )
+            frame_losses: list[torch.Tensor] = []
+            for frame_index, state in enumerate(states[1:]):
+                rendered = render_latent_state(trainer.system, state)
+                target = trainer.exemplar_frames[frame_index].unsqueeze(0)
+                frame_losses.append(
+                    local_loss(
+                        trainer.vgg_features,
+                        rendered,
+                        target,
+                        loss_type=trainer.loss_cfg.loss_type,
+                        generator=trainer.runtime.generator,
+                    )
+                )
+            return float(torch.stack(frame_losses).mean().item())
+    finally:
+        if was_model_training:
+            trainer.trajectory_model.train()
+        if was_vgg_training:
+            trainer.vgg_features.train()
 
 
 def effective_lr(trainer) -> float:

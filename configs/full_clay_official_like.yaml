@@ -47,12 +47,12 @@ train:
     batch_size: 1
     lr: 0.0005
     dry_run: false
-    n_iter: 60000
+    n_iter: 10000
     log_every: 1
     checkpoint_every: 500
     resume_from: null
   stage:
-    n_init_iter: 20000
+    n_init_iter: 2000
     refresh_rate_init: 2
     refresh_rate_local: 6
   loss:

@@ -20,12 +20,14 @@ def build_sample_timeline(
     synthesis_frames: int = 50,
 ) -> tuple[torch.Tensor, int]:
     syn_t = timeline.t_S - timeline.t_I
+    # Use one extra logspace sample and drop the terminal point (t_S) so that
+    # concatenation with transition times remains strictly increasing.
     ts_synthesis = torch.logspace(
         0.0,
         math.log10(1.0 + syn_t),
-        synthesis_frames,
+        synthesis_frames + 1,
         dtype=dtype,
-    ) - 1.0 - syn_t
+    )[:-1] - 1.0 - syn_t
     ts_transition = torch.linspace(
         timeline.t_S,
         timeline.t_E,

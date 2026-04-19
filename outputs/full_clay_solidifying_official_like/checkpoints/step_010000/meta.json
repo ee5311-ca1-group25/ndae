@@ -1,0 +1,17 @@
+{
+  "cycle_step": 2,
+  "effective_lr": 0.0005,
+  "files": [
+    "flashlight.pt",
+    "meta.json",
+    "model.pt",
+    "optimizer.pt",
+    "scheduler.pt",
+    "trainer_state.pt"
+  ],
+  "resume_ready": false,
+  "saved_at_refresh_boundary": false,
+  "saved_during_eval": true,
+  "stage": "local",
+  "step": 10000
+}
